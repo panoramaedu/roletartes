@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RoletArtes</title>
+<style>
+  /* ============ RESET & VARIÁVEIS ============ */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  :root {
+    --bg: #f8f7fc;
+    --bg-alt: #ffffff;
+    --bg-soft: #efeaf9;
+    --text: #1f1b2e;
+    --text-soft: #5b5470;
+    --border: #e3ddf2;
+    --primary: #7c3aed;
+    --primary-hover: #6d28d9;
+    --primary-soft: #ede9fe;
+    --danger: #dc2626;
+    --danger-hover: #b91c1c;
+    --success: #16a34a;
+    --shadow: 0 4px 20px rgba(124, 58, 237, 0.08);
+    --shadow-lg: 0 10px 40px rgba(124, 58, 237, 0.15);
+    --radius: 14px;
+    --radius-sm: 8px;
+    --transition: 0.25s ease;
+  }
+  
+  [data-theme="dark"] {
+    --bg: #13101c;
+    --bg-alt: #1c1829;
+    --bg-soft: #252036;
+    --text: #f3f0ff;
+    --text-soft: #a8a0c0;
+    --border: #322a4a;
+    --primary: #a855f7;
+    --primary-hover: #9333ea;
+    --primary-soft: #2e1f4d;
+    --shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.5);
+  }
+  
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    transition: background var(--transition), color var(--transition);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* ============ HEADER ============ */
+  header {
+    background: var(--bg-alt);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    box-shadow: var(--shadow);
+  }
+  
+  .logo {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--primary);
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .logo-icon { font-size: 1.6rem; }
+  
+  .title-edit {
+    flex: 1;
+    min-width: 150px;
+    background: transparent;
+    border: 1px dashed transparent;
+    color: var(--text);
+    font-size: 1rem;
+    font-weight: 500;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    transition: border-color var(--transition), background var(--transition);
+  }
+  .title-edit:hover, .title-edit:focus {
+    border-color: var(--primary);
+    background: var(--bg-soft);
+    outline: none;
+  }
+  
+  .header-actions { display: flex; gap: 8px; }
+  
+  .icon-btn {
+    width: 40px; height: 40px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-alt);
+    color: var(--text);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    transition: all var(--transition);
+  }
+  .icon-btn:hover { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
+  .icon-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+  
+  /* ============ LAYOUT PRINCIPAL ============ */
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 340px 1fr 300px;
+    gap: 20px;
+    padding: 20px;
+    max-width: 1600px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  
+  .panel {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    box-shadow: var(--shadow);
+  }
+  
+  .panel h2 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel h2 .badge {
+    background: var(--primary-soft);
+    color: var(--primary);
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+  
+  /* ============ PAINEL DE ENTRADA ============ */
+  textarea {
+    width: 100%;
+    min-height: 180px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    font-family: "SF Mono", Monaco, Consolas, monospace;
+    font-size: 0.85rem;
+    resize: vertical;
+    transition: border-color var(--transition);
+  }
+  textarea:focus { outline: none; border-color: var(--primary); }
+  
+  .hint {
+    font-size: 0.8rem;
+    color: var(--text-soft);
+    margin: 8px 0 12px;
+  }
+  
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  
+  .btn {
+    padding: 9px 14px;
+    border-radius: var(--radius-sm);
+    border: none;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+  .btn-secondary { background: var(--bg-soft); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-danger:hover { background: var(--danger-hover); }
+  .btn-ghost { background: transparent; color: var(--text-soft); }
+  .btn-ghost:hover { color: var(--primary); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  
+  .file-input { display: none; }
+  
+  /* ============ ROLETA ============ */
+  .wheel-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 20px;
+  }
+  
+  .wheel-wrapper {
+    position: relative;
+    width: min(520px, 80vw);
+    aspect-ratio: 1;
+    max-width: 100%;
+  }
+  
+  .wheel-pointer {
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 18px solid transparent;
+    border-right: 18px solid transparent;
+    border-top: 32px solid var(--primary);
+    z-index: 10;
+    filter: drop-shadow(0 3px 6px rgba(0,0,0,0.2));
+  }
+  
+  canvas.wheel {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: var(--shadow-lg), inset 0 0 0 6px var(--bg-alt), inset 0 0 0 8px var(--primary);
+    transition: transform 0.1s;
+  }
+  canvas.wheel:hover { filter: brightness(1.05); }
+  canvas.wheel.spinning { cursor: not-allowed; }
+  
+  .wheel-center {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    background: var(--bg-alt);
+    border: 4px solid var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    pointer-events: none;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+  }
+  
+  .wheel-status {
+    margin-top: 16px;
+    text-align: center;
+    color: var(--text-soft);
+    font-size: 0.9rem;
+    min-height: 24px;
+  }
+  
+  .wheel-empty {
+    text-align: center;
+    color: var(--text-soft);
+    padding: 40px 20px;
+  }
+  .wheel-empty-icon { font-size: 3rem; margin-bottom: 10px; opacity: 0.5; }
+  
+  /* ============ HISTÓRICO ============ */
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .history-list::-webkit-scrollbar { width: 6px; }
+  .history-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  
+  .history-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+  }
+  .history-item img {
+    width: 44px; height: 44px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: var(--bg-soft);
+  }
+  .history-item-info { flex: 1; min-width: 0; }
+  .history-item-num {
+    font-size: 0.7rem;
+    color: var(--text-soft);
+    font-weight: 600;
+  }
+  .history-item-url {
+    font-size: 0.75rem;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .history-empty {
+    text-align: center;
+    color: var(--text-soft);
+    font-size: 0.85rem;
+    padding: 20px 0;
+  }
+  
+  /* ============ MODAL ============ */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(6px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+    animation: fadeIn 0.2s ease;
+  }
+  .modal-overlay.active { display: flex; }
+  
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  
+  .modal {
+    background: var(--bg-alt);
+    border-radius: var(--radius);
+    max-width: 90vw;
+    max-height: 90vh;
+    width: 700px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+    animation: slideUp 0.3s ease;
+  }
+  
+  .modal-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .modal-header h3 { font-size: 1.05rem; font-weight: 700; }
+  
+  .modal-close {
+    background: transparent;
+    border: none;
+    color: var(--text-soft);
+    font-size: 1.5rem;
+    cursor: pointer;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition);
+  }
+  .modal-close:hover { background: var(--bg-soft); color: var(--danger); }
+  
+  .modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  
+  .modal-image-wrap {
+    width: 100%;
+    max-height: 60vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    min-height: 200px;
+    position: relative;
+  }
+  .modal-image-wrap img {
+    max-width: 100%;
+    max-height: 60vh;
+    object-fit: contain;
+    display: block;
+  }
+  .modal-image-wrap .loader {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  
+  .modal-image-wrap .error-msg {
+    color: var(--danger);
+    font-size: 0.9rem;
+    text-align: center;
+    padding: 20px;
+  }
+  
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+  }
+  .modal-actions .btn { flex: 1; min-width: 120px; justify-content: center; }
+  .btn-highlight {
+    background: var(--primary);
+    color: white;
+    font-size: 1rem;
+    padding: 12px 20px;
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+  }
+  .btn-highlight:hover { background: var(--primary-hover); transform: translateY(-2px); }
+  
+  /* ============ MODO APRESENTAÇÃO ============ */
+  .presentation-overlay {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 20px;
+  }
+  .presentation-overlay.active { display: flex; }
+  .presentation-overlay img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+  .presentation-close {
+    position: absolute;
+    top: 20px; right: 20px;
+    background: rgba(255,255,255,0.15);
+    color: white;
+    border: none;
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: background var(--transition);
+  }
+  .presentation-close:hover { background: rgba(255,255,255,0.3); }
+  
+  /* ============ TOAST ============ */
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--text);
+    color: var(--bg);
+    padding: 10px 18px;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 500;
+    z-index: 300;
+    transition: transform 0.3s ease;
+    box-shadow: var(--shadow-lg);
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  
+  /* ============ RESPONSIVO ============ */
+  @media (max-width: 1100px) {
+    main { grid-template-columns: 1fr; }
+    .wheel-wrapper { width: min(420px, 85vw); }
+  }
+  
+  @media (max-width: 600px) {
+    header { padding: 10px 14px; }
+    .logo { font-size: 1.1rem; }
+    .title-edit { font-size: 0.9rem; order: 3; width: 100%; }
+    main { padding: 12px; gap: 12px; }
+    .panel { padding: 14px; }
+    .wheel-wrapper { width: min(340px, 90vw); }
+    .wheel-center { width: 44px; height: 44px; font-size: 1.2rem; }
+    .modal { width: 95vw; }
+    .modal-actions .btn { min-width: 100px; font-size: 0.85rem; padding: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span class="logo-icon">🎨</span> RoletArtes</div>
+  <input type="text" class="title-edit" id="titleEdit" placeholder="Digite o título da roleta..." value="Minha Roleta" />
+  <div class="header-actions">
+    <button class="icon-btn" id="btnMute" title="Ativar/desativar som">🔊</button>
+    <button class="icon-btn" id="btnTheme" title="Alternar tema">🌙</button>
+    <button class="icon-btn" id="btnPresent" title="Modo apresentação">⛶</button>
+  </div>
+</header>
+
+<main>
+  <!-- PAINEL ESQUERDO: ENTRADA -->
+  <section class="panel">
+    <h2>📥 Links das imagens</h2>
+    <textarea id="linksInput" placeholder="Cole aqui os links das imagens, um por linha...&#10;&#10;Ex:&#10;https://exemplo.com/img1.jpg&#10;https://exemplo.com/img2.png"></textarea>
+    <p class="hint" id="counterHint">0 imagens carregadas</p>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnLoad">🎯 Carregar</button>
+      <button class="btn btn-secondary" id="btnExport">💾 Exportar</button>
+      <button class="btn btn-secondary" id="btnImport">📂 Importar</button>
+      <input type="file" id="fileInput" class="file-input" accept=".json" />
+    </div>
+  </section>
+
+  <!-- CENTRO: ROLETA -->
+  <section class="panel wheel-container">
+    <div id="wheelArea">
+      <div class="wheel-empty" id="wheelEmpty">
+        <div class="wheel-empty-icon">🎡</div>
+        <p>Cole os links das imagens ao lado e clique em <strong>Carregar</strong> para começar.</p>
+      </div>
+      <div class="wheel-wrapper" id="wheelWrapper" style="display:none;">
+        <div class="wheel-pointer"></div>
+        <canvas class="wheel" id="wheelCanvas" width="600" height="600"></canvas>
+        <div class="wheel-center">🎨</div>
+      </div>
+    </div>
+    <div class="wheel-status" id="wheelStatus">Clique na roleta para girar</div>
+  </section>
+
+  <!-- PAINEL DIREITO: HISTÓRICO -->
+  <aside class="panel">
+    <h2>📜 Histórico <span class="badge" id="historyCount">0</span></h2>
+    <div class="history-list" id="historyList">
+      <div class="history-empty">Nenhum sorteio ainda.</div>
+    </div>
+    <div class="btn-row" style="margin-top: 12px;">
+      <button class="btn btn-ghost" id="btnClearHistory" style="flex:1;">🗑️ Limpar histórico</button>
+    </div>
+  </aside>
+</main>
+
+<!-- MODAL DE IMAGEM SORTEADA -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>🎉 Imagem sorteada!</h3>
+      <button class="modal-close" id="modalClose">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-image-wrap" id="modalImageWrap">
+        <div class="loader" id="modalLoader"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-highlight" id="btnRemove">⭐ Remover</button>
+        <button class="btn btn-secondary" id="btnContinue">▶ Continuar</button>
+        <button class="btn btn-secondary" id="btnRespin">🔄 Sortear de novo</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODO APRESENTAÇÃO -->
+<div class="presentation-overlay" id="presentationOverlay">
+  <button class="presentation-close" id="presentationClose">×</button>
+  <img id="presentationImg" src="" alt="" />
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ ESTADO GLOBAL ============ */
+const state = {
+  items: [],          // URLs carregadas
+  colors: [],         // Cores atribuídas a cada item
+  spinning: false,
+  currentAngle: 0,
+  history: [],
+  muted: false,
+  theme: 'light',
+  title: 'Minha Roleta',
+  presentationMode: false,
+  currentDrawn: null  // URL atualmente exibida no modal
+};
+
+/* ============ PALETA EDUCACIONAL ============ */
+const PALETTE = [
+  '#7c3aed', // púrpura
+  '#06b6d4', // ciano
+  '#f59e0b', // âmbar
+  '#10b981', // esmeralda
+  '#ec4899', // rosa
+  '#3b82f6', // azul
+  '#ef4444', // vermelho
+  '#84cc16', // lima
+  '#f97316', // laranja
+  '#8b5cf6', // violeta
+  '#14b8a6', // teal
+  '#eab308'  // amarelo
+];
+
+/* ============ ELEMENTOS ============ */
+const $ = id => document.getElementById(id);
+const linksInput = $('linksInput');
+const counterHint = $('counterHint');
+const wheelEmpty = $('wheelEmpty');
+const wheelWrapper = $('wheelWrapper');
+const wheelCanvas = $('wheelCanvas');
+const wheelStatus = $('wheelStatus');
+const historyList = $('historyList');
+const historyCount = $('historyCount');
+const modalOverlay = $('modalOverlay');
+const modalImageWrap = $('modalImageWrap');
+const modalLoader = $('modalLoader');
+const presentationOverlay = $('presentationOverlay');
+const presentationImg = $('presentationImg');
+const toast = $('toast');
+const ctx = wheelCanvas.getContext('2d');
+
+/* ============ UTILITÁRIOS ============ */
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+function saveState() {
+  try {
+    localStorage.setItem('roletartes_links', JSON.stringify(state.items));
+    localStorage.setItem('roletartes_title', state.title);
+    localStorage.setItem('roletartes_theme', state.theme);
+    localStorage.setItem('roletartes_muted', state.muted);
+    localStorage.setItem('roletartes_history', JSON.stringify(state.history));
+  } catch(e) {}
+}
+
+function loadState() {
+  try {
+    const links = localStorage.getItem('roletartes_links');
+    const title = localStorage.getItem('roletartes_title');
+    const theme = localStorage.getItem('roletartes_theme');
+    const muted = localStorage.getItem('roletartes_muted');
+    const history = localStorage.getItem('roletartes_history');
+    if (links) state.items = JSON.parse(links);
+    if (title) { state.title = title; $('titleEdit').value = title; }
+    if (theme) { state.theme = theme; applyTheme(); }
+    if (muted === 'true') { state.muted = true; $('btnMute').textContent = '🔇'; }
+    if (history) state.history = JSON.parse(history);
+    if (state.items.length) {
+      linksInput.value = state.items.join('\n');
+      assignColors();
+      renderWheel();
+    }
+    renderHistory();
+  } catch(e) {}
+}
+
+/* ============ CORES SEM REPETIÇÃO ADJACENTE ============ */
+function assignColors() {
+  const n = state.items.length;
+  state.colors = [];
+  if (n === 0) return;
+  // Estratégia: percorrer paleta pulando índices para evitar adjacência
+  // Usamos um passo k coprimo com PALETTE.length quando possível
+  const P = PALETTE.length;
+  let step = 1;
+  // Encontrar passo que garanta boa distribuição
+  for (let s = 3; s < P; s++) {
+    if (gcd(s, P) === 1) { step = s; break; }
+  }
+  let idx = 0;
+  for (let i = 0; i < n; i++) {
+    let color = PALETTE[idx % P];
+    // Garantir que não seja igual à anterior
+    if (i > 0 && color === state.colors[i-1]) {
+      color = PALETTE[(idx + 1) % P];
+      idx++;
+    }
+    // Para o último, garantir que não seja igual ao primeiro (roleta é circular)
+    if (i === n - 1 && n > 1 && color === state.colors[0]) {
+      color = PALETTE[(idx + 1) % P];
+    }
+    state.colors.push(color);
+    idx = (idx + step) % P;
+  }
+}
+
+function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
+
+/* ============ RENDERIZAÇÃO DA ROLETA ============ */
+function renderWheel() {
+  const n = state.items.length;
+  if (n === 0) {
+    wheelEmpty.style.display = 'block';
+    wheelWrapper.style.display = 'none';
+    return;
+  }
+  wheelEmpty.style.display = 'none';
+  wheelWrapper.style.display = 'block';
+  
+  const size = wheelCanvas.width;
+  const cx = size / 2, cy = size / 2;
+  const r = size / 2 - 4;
+  const sliceAngle = (Math.PI * 2) / n;
+  
+  ctx.clearRect(0, 0, size, size);
+  
+  for (let i = 0; i < n; i++) {
+    const start = state.currentAngle + i * sliceAngle;
+    const end = start + sliceAngle;
+    
+    // Fatia
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, start, end);
+    ctx.closePath();
+    ctx.fillStyle = state.colors[i];
+    ctx.fill();
+    
+    // Borda entre fatias
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Número da fatia (pequeno, discreto) - apenas se houver espaço
+    if (n <= 30) {
+      const mid = start + sliceAngle / 2;
+      const tr = r * 0.75;
+      const tx = cx + Math.cos(mid) * tr;
+      const ty = cy + Math.sin(mid) * tr;
+      ctx.save();
+      ctx.translate(tx, ty);
+      ctx.rotate(mid + Math.PI / 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.font = `bold ${Math.max(12, Math.min(20, 400/n))}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(i + 1, 0, 0);
+      ctx.restore();
+    }
+  }
+  
+  // Borda externa
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+}
+
+/* ============ ANIMAÇÃO DE GIRO ============ */
+function spinWheel() {
+  if (state.spinning || state.items.length === 0) return;
+  if (state.items.length === 1) {
+    // Apenas um item: mostra direto
+    drawItem(0);
+    return;
+  }
+  
+  state.spinning = true;
+  wheelCanvas.classList.add('spinning');
+  wheelStatus.textContent = 'Girando...';
+  
+  // Ângulo aleatório final (múltiplas voltas + posição aleatória)
+  const extraTurns = 5 + Math.random() * 3; // 5 a 8 voltas
+  const randomFinal = Math.random() * Math.PI * 2;
+  const totalRotation = extraTurns * Math.PI * 2 + randomFinal;
+  const startAngle = state.currentAngle;
+  const duration = 4500 + Math.random() * 1500; // 4.5 a 6s
+  const startTime = performance.now();
+  
+  let lastTickSlice = -1;
+  
+  function animate(now) {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / duration, 1);
+    // Easing: ease-out cubic com "fricção"
+    const eased = 1 - Math.pow(1 - t, 3);
+    state.currentAngle = startAngle + totalRotation * eased;
+    renderWheel();
+    
+    // Tick sonoro ao passar por cada fatia
+    const n = state.items.length;
+    const sliceAngle = (Math.PI * 2) / n;
+    // Ponteiro está no topo (ângulo -PI/2)
+    const pointerAngle = -Math.PI / 2;
+    const normalizedAngle = ((pointerAngle - state.currentAngle) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+    const currentSlice = Math.floor(normalizedAngle / sliceAngle);
+    if (currentSlice !== lastTickSlice) {
+      lastTickSlice = currentSlice;
+      playTick();
+    }
+    
+    if (t < 1) {
+      requestAnimationFrame(animate);
+    } else {
+      state.spinning = false;
+      wheelCanvas.classList.remove('spinning');
+      // Determinar fatia sorteada
+      const finalNormalized = ((pointerAngle - state.currentAngle) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+      const winningIndex = Math.floor(finalNormalized / sliceAngle) % n;
+      playWin();
+      drawItem(winningIndex);
+    }
+  }
+  
+  requestAnimationFrame(animate);
+}
+
+/* ============ SORTEIO E MODAL ============ */
+function drawItem(index) {
+  const url = state.items[index];
+  state.currentDrawn = url;
+  wheelStatus.textContent = 'Sorteado!';
+  showModal(url);
+  addToHistory(url);
+}
+
+function showModal(url) {
+  modalOverlay.classList.add('active');
+  modalImageWrap.innerHTML = '';
+  const loader = document.createElement('div');
+  loader.className = 'loader';
+  modalImageWrap.appendChild(loader);
+  
+  const img = new Image();
+  img.onload = () => {
+    modalImageWrap.innerHTML = '';
+    modalImageWrap.appendChild(img);
+  };
+  img.onerror = () => {
+    modalImageWrap.innerHTML = '<div class="error-msg">⚠️ Não foi possível carregar a imagem.<br><small style="word-break:break-all;">' + escapeHtml(url) + '</small></div>';
+  };
+  img.src = url;
+  img.alt = 'Imagem sorteada';
+}
+
+function closeModal() {
+  modalOverlay.classList.remove('active');
+  state.currentDrawn = null;
+  wheelStatus.textContent = 'Clique na roleta para girar';
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ============ HISTÓRICO ============ */
+function addToHistory(url) {
+  state.history.unshift({ url, time: Date.now() });
+  if (state.history.length > 50) state.history.pop();
+  renderHistory();
+  saveState();
+}
+
+function renderHistory() {
+  historyCount.textContent = state.history.length;
+  if (state.history.length === 0) {
+    historyList.innerHTML = '<div class="history-empty">Nenhum sorteio ainda.</div>';
+    return;
+  }
+  historyList.innerHTML = '';
+  state.history.forEach((item, i) => {
+    const div = document.createElement('div');
+    div.className = 'history-item';
+    div.innerHTML = `
+      <img src="${escapeHtml(item.url)}" alt="" onerror="this.style.opacity=0.3"/>
+      <div class="history-item-info">
+        <div class="history-item-num">#${state.history.length - i}</div>
+        <div class="history-item-url" title="${escapeHtml(item.url)}">${escapeHtml(item.url)}</div>
+      </div>
+    `;
+    historyList.appendChild(div);
+  });
+}
+
+/* ============ ÁUDIO (Web Audio API - sons sintéticos) ============ */
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch(e) { return null; }
+  }
+  return audioCtx;
+}
+
+function playTick() {
+  if (state.muted) return;
+  const ac = getAudioCtx();
+  if (!ac) return;
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = 800 + Math.random() * 200;
+  gain.gain.setValueAtTime(0.05, ac.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.05);
+  osc.connect(gain); gain.connect(ac.destination);
+  osc.start(); osc.stop(ac.currentTime + 0.05);
+}
+
+function playWin() {
+  if (state.muted) return;
+  const ac = getAudioCtx();
+  if (!ac) return;
+  const notes = [523, 659, 784, 1047]; // C E G C
+  notes.forEach((freq, i) => {
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    const t = ac.currentTime + i * 0.1;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.15, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.start(t); osc.stop(t + 0.3);
+  });
+}
+
+/* ============ TEMA ============ */
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme', state.theme);
+  $('btnTheme').textContent = state.theme === 'dark' ? '☀️' : '🌙';
+}
+
+/* ============ EVENTOS ============ */
+$('btnLoad').addEventListener('click', () => {
+  const raw = linksInput.value;
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  // Remove duplicatas mantendo ordem
+  const unique = [...new Set(lines)];
+  state.items = unique;
+  linksInput.value = unique.join('\n');
+  assignColors();
+  state.currentAngle = 0;
+  renderWheel();
+  counterHint.textContent = `${unique.length} imagem${unique.length !== 1 ? 'ns' : ''} carregada${unique.length !== 1 ? 's' : ''}`;
+  saveState();
+  if (unique.length > 0) showToast('✅ Roleta carregada!');
+  else showToast('⚠️ Nenhum link válido encontrado');
+});
+
+linksInput.addEventListener('input', () => {
+  const lines = linksInput.value.split('\n').filter(l => l.trim().length > 0);
+  counterHint.textContent = `${lines.length} linha${lines.length !== 1 ? 's' : ''} detectada${lines.length !== 1 ? 's' : ''}`;
+});
+
+$('btnExport').addEventListener('click', () => {
+  if (state.items.length === 0) { showToast('⚠️ Nada para exportar'); return; }
+  const data = {
+    title: state.title,
+    items: state.items,
+    exportedAt: new Date().toISOString()
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `roletartes-${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('💾 JSON exportado!');
+});
+
+$('btnImport').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (Array.isArray(data.items)) {
+        state.items = data.items;
+        linksInput.value = data.items.join('\n');
+        if (data.title) { state.title = data.title; $('titleEdit').value = data.title; }
+        assignColors();
+        renderWheel();
+        saveState();
+        showToast('📂 JSON importado!');
+      } else {
+        showToast('⚠️ JSON inválido');
+      }
+    } catch(err) {
+      showToast('⚠️ Erro ao ler arquivo');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+$('titleEdit').addEventListener('input', e => {
+  state.title = e.target.value || 'Minha Roleta';
+  document.title = state.title + ' — RoletArtes';
+  saveState();
+});
+
+$('btnTheme').addEventListener('click', () => {
+  state.theme = state.theme === 'light' ? 'dark' : 'light';
+  applyTheme();
+  saveState();
+});
+
+$('btnMute').addEventListener('click', () => {
+  state.muted = !state.muted;
+  $('btnMute').textContent = state.muted ? '🔇' : '🔊';
+  $('btnMute').classList.toggle('active', state.muted);
+  saveState();
+});
+
+$('btnPresent').addEventListener('click', () => {
+  if (!state.currentDrawn) {
+    showToast('⚠️ Sorteie uma imagem primeiro');
+    return;
+  }
+  presentationImg.src = state.currentDrawn;
+  presentationOverlay.classList.add('active');
+  state.presentationMode = true;
+});
+
+$('presentationClose').addEventListener('click', () => {
+  presentationOverlay.classList.remove('active');
+  state.presentationMode = false;
+});
+
+wheelCanvas.addEventListener('click', spinWheel);
+
+$('modalClose').addEventListener('click', closeModal);
+modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) closeModal(); });
+
+$('btnRemove').addEventListener('click', () => {
+  if (!state.currentDrawn) return;
+  state.items = state.items.filter(u => u !== state.currentDrawn);
+  linksInput.value = state.items.join('\n');
+  assignColors();
+  renderWheel();
+  counterHint.textContent = `${state.items.length} imagem${state.items.length !== 1 ? 'ns' : ''} carregada${state.items.length !== 1 ? 's' : ''}`;
+  saveState();
+  closeModal();
+  showToast('⭐ Imagem removida da roleta');
+});
+
+$('btnContinue').addEventListener('click', closeModal);
+
+$('btnRespin').addEventListener('click', () => {
+  closeModal();
+  setTimeout(spinWheel, 300);
+});
+
+$('btnClearHistory').addEventListener('click', () => {
+  if (state.history.length === 0) return;
+  if (confirm('Limpar todo o histórico?')) {
+    state.history = [];
+    renderHistory();
+    saveState();
+    showToast('🗑️ Histórico limpo');
+  }
+});
+
+// Atalhos de teclado
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'Escape') {
+    if (state.presentationMode) {
+      presentationOverlay.classList.remove('active');
+      state.presentationMode = false;
+    } else if (modalOverlay.classList.contains('active')) {
+      closeModal();
+    }
+  }
+  if (e.key === ' ' && !state.spinning && !modalOverlay.classList.contains('active')) {
+    e.preventDefault();
+    spinWheel();
+  }
+});
+
+/* ============ INICIALIZAÇÃO ============ */
+applyTheme();
+document.title = state.title + ' — RoletArtes';
+loadState();
+counterHint.textContent = `${state.items.length} imagem${state.items.length !== 1 ? 'ns' : ''} carregada${state.items.length !== 1 ? 's' : ''}`;
+</script>
+
+</body>
+</html>
