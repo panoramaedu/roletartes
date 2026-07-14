@@ -176,6 +176,17 @@
     margin: 8px 0 12px;
   }
   
+  .storage-warning {
+    font-size: 0.75rem;
+    color: var(--danger);
+    background: rgba(220, 38, 38, 0.1);
+    padding: 8px;
+    border-radius: var(--radius-sm);
+    margin: 8px 0;
+    display: none;
+  }
+  .storage-warning.show { display: block; }
+  
   .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
   
   .btn {
@@ -201,6 +212,22 @@
   .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
   
   .file-input { display: none; }
+  
+  .upload-area {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all var(--transition);
+    margin: 10px 0;
+  }
+  .upload-area:hover {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+  }
+  .upload-area-icon { font-size: 1.5rem; margin-bottom: 4px; }
+  .upload-area-text { font-size: 0.85rem; color: var(--text-soft); }
   
   /* ============ ROLETA ============ */
   .wheel-container {
@@ -524,6 +551,17 @@
     <h2>📥 Links das imagens</h2>
     <textarea id="linksInput" placeholder="Cole aqui os links das imagens, um por linha...&#10;&#10;Ex:&#10;https://exemplo.com/img1.jpg&#10;https://exemplo.com/img2.png"></textarea>
     <p class="hint" id="counterHint">0 imagens carregadas</p>
+    
+    <div class="upload-area" id="uploadArea">
+      <div class="upload-area-icon">📤</div>
+      <div class="upload-area-text">Clique ou arraste imagens aqui</div>
+    </div>
+    <input type="file" id="imageUpload" class="file-input" accept="image/*" multiple />
+    
+    <div class="storage-warning" id="storageWarning">
+      ⚠️ Atenção: localStorage tem limite de ~5MB. Muitas imagens podem exceder esse limite.
+    </div>
+    
     <div class="btn-row">
       <button class="btn btn-primary" id="btnLoad">🎯 Carregar</button>
       <button class="btn btn-secondary" id="btnExport">💾 Exportar</button>
@@ -592,7 +630,7 @@
 <script>
 /* ============ ESTADO GLOBAL ============ */
 const state = {
-  items: [],          // URLs carregadas
+  items: [],          // URLs ou data URLs carregadas
   colors: [],         // Cores atribuídas a cada item
   spinning: false,
   currentAngle: 0,
@@ -637,6 +675,9 @@ const presentationOverlay = $('presentationOverlay');
 const presentationImg = $('presentationImg');
 const toast = $('toast');
 const ctx = wheelCanvas.getContext('2d');
+const uploadArea = $('uploadArea');
+const imageUpload = $('imageUpload');
+const storageWarning = $('storageWarning');
 
 /* ============ UTILITÁRIOS ============ */
 function showToast(msg) {
@@ -646,6 +687,22 @@ function showToast(msg) {
   toast._t = setTimeout(() => toast.classList.remove('show'), 2500);
 }
 
+function checkStorageQuota() {
+  try {
+    const used = JSON.stringify(state.items).length;
+    const limit = 5 * 1024 * 1024; // 5MB
+    if (used > limit * 0.8) {
+      storageWarning.classList.add('show');
+      return false;
+    } else {
+      storageWarning.classList.remove('show');
+      return true;
+    }
+  } catch(e) {
+    return true;
+  }
+}
+
 function saveState() {
   try {
     localStorage.setItem('roletartes_links', JSON.stringify(state.items));
@@ -653,7 +710,13 @@ function saveState() {
     localStorage.setItem('roletartes_theme', state.theme);
     localStorage.setItem('roletartes_muted', state.muted);
     localStorage.setItem('roletartes_history', JSON.stringify(state.history));
-  } catch(e) {}
+    checkStorageQuota();
+  } catch(e) {
+    if (e.name === 'QuotaExceededError') {
+      showToast('⚠️ localStorage cheio! Remova algumas imagens.');
+      storageWarning.classList.add('show');
+    }
+  }
 }
 
 function loadState() {
@@ -669,12 +732,60 @@ function loadState() {
     if (muted === 'true') { state.muted = true; $('btnMute').textContent = '🔇'; }
     if (history) state.history = JSON.parse(history);
     if (state.items.length) {
-      linksInput.value = state.items.join('\n');
+      // Separar URLs remotas de data URLs
+      const remoteUrls = state.items.filter(item => !item.startsWith('data:'));
+      linksInput.value = remoteUrls.join('\n');
       assignColors();
       renderWheel();
     }
     renderHistory();
+    checkStorageQuota();
   } catch(e) {}
+}
+
+/* ============ UPLOAD DE IMAGENS ============ */
+function handleImageUpload(files) {
+  const fileArray = Array.from(files);
+  if (fileArray.length === 0) return;
+  
+  let processed = 0;
+  const total = fileArray.length;
+  
+  fileArray.forEach(file => {
+    if (!file.type.startsWith('image/')) {
+      processed++;
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target.result;
+      state.items.push(dataUrl);
+      processed++;
+      
+      if (processed === total) {
+        assignColors();
+        renderWheel();
+        saveState();
+        showToast(`✅ ${total} imagem${total > 1 ? 'ns' : ''} carregada${total > 1 ? 's' : ''}`);
+        updateCounter();
+      }
+    };
+    reader.onerror = () => {
+      processed++;
+      if (processed === total) {
+        showToast('⚠️ Algumas imagens não puderam ser carregadas');
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function updateCounter() {
+  const remoteCount = linksInput.value.split('\n').filter(l => l.trim().length > 0).length;
+  const localCount = state.items.filter(item => item.startsWith('data:')).length;
+  const total = remoteCount + localCount;
+  counterHint.textContent = `${total} imagem${total !== 1 ? 'ns' : ''} (${localCount} local${localCount !== 1 ? 'is' : ''}, ${remoteCount} link${remoteCount !== 1 ? 's' : ''})`;
 }
 
 /* ============ CORES SEM REPETIÇÃO ADJACENTE ============ */
@@ -682,23 +793,18 @@ function assignColors() {
   const n = state.items.length;
   state.colors = [];
   if (n === 0) return;
-  // Estratégia: percorrer paleta pulando índices para evitar adjacência
-  // Usamos um passo k coprimo com PALETTE.length quando possível
   const P = PALETTE.length;
   let step = 1;
-  // Encontrar passo que garanta boa distribuição
   for (let s = 3; s < P; s++) {
     if (gcd(s, P) === 1) { step = s; break; }
   }
   let idx = 0;
   for (let i = 0; i < n; i++) {
     let color = PALETTE[idx % P];
-    // Garantir que não seja igual à anterior
     if (i > 0 && color === state.colors[i-1]) {
       color = PALETTE[(idx + 1) % P];
       idx++;
     }
-    // Para o último, garantir que não seja igual ao primeiro (roleta é circular)
     if (i === n - 1 && n > 1 && color === state.colors[0]) {
       color = PALETTE[(idx + 1) % P];
     }
@@ -731,7 +837,6 @@ function renderWheel() {
     const start = state.currentAngle + i * sliceAngle;
     const end = start + sliceAngle;
     
-    // Fatia
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.arc(cx, cy, r, start, end);
@@ -739,12 +844,10 @@ function renderWheel() {
     ctx.fillStyle = state.colors[i];
     ctx.fill();
     
-    // Borda entre fatias
     ctx.strokeStyle = 'rgba(255,255,255,0.3)';
     ctx.lineWidth = 2;
     ctx.stroke();
     
-    // Número da fatia (pequeno, discreto) - apenas se houver espaço
     if (n <= 30) {
       const mid = start + sliceAngle / 2;
       const tr = r * 0.75;
@@ -762,7 +865,6 @@ function renderWheel() {
     }
   }
   
-  // Borda externa
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.strokeStyle = 'rgba(255,255,255,0.2)';
@@ -774,7 +876,6 @@ function renderWheel() {
 function spinWheel() {
   if (state.spinning || state.items.length === 0) return;
   if (state.items.length === 1) {
-    // Apenas um item: mostra direto
     drawItem(0);
     return;
   }
@@ -783,12 +884,11 @@ function spinWheel() {
   wheelCanvas.classList.add('spinning');
   wheelStatus.textContent = 'Girando...';
   
-  // Ângulo aleatório final (múltiplas voltas + posição aleatória)
-  const extraTurns = 5 + Math.random() * 3; // 5 a 8 voltas
+  const extraTurns = 5 + Math.random() * 3;
   const randomFinal = Math.random() * Math.PI * 2;
   const totalRotation = extraTurns * Math.PI * 2 + randomFinal;
   const startAngle = state.currentAngle;
-  const duration = 4500 + Math.random() * 1500; // 4.5 a 6s
+  const duration = 4500 + Math.random() * 1500;
   const startTime = performance.now();
   
   let lastTickSlice = -1;
@@ -796,15 +896,12 @@ function spinWheel() {
   function animate(now) {
     const elapsed = now - startTime;
     const t = Math.min(elapsed / duration, 1);
-    // Easing: ease-out cubic com "fricção"
     const eased = 1 - Math.pow(1 - t, 3);
     state.currentAngle = startAngle + totalRotation * eased;
     renderWheel();
     
-    // Tick sonoro ao passar por cada fatia
     const n = state.items.length;
     const sliceAngle = (Math.PI * 2) / n;
-    // Ponteiro está no topo (ângulo -PI/2)
     const pointerAngle = -Math.PI / 2;
     const normalizedAngle = ((pointerAngle - state.currentAngle) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
     const currentSlice = Math.floor(normalizedAngle / sliceAngle);
@@ -818,7 +915,6 @@ function spinWheel() {
     } else {
       state.spinning = false;
       wheelCanvas.classList.remove('spinning');
-      // Determinar fatia sorteada
       const finalNormalized = ((pointerAngle - state.currentAngle) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
       const winningIndex = Math.floor(finalNormalized / sliceAngle) % n;
       playWin();
@@ -851,7 +947,7 @@ function showModal(url) {
     modalImageWrap.appendChild(img);
   };
   img.onerror = () => {
-    modalImageWrap.innerHTML = '<div class="error-msg">⚠️ Não foi possível carregar a imagem.<br><small style="word-break:break-all;">' + escapeHtml(url) + '</small></div>';
+    modalImageWrap.innerHTML = '<div class="error-msg">⚠️ Não foi possível carregar a imagem.</div>';
   };
   img.src = url;
   img.alt = 'Imagem sorteada';
@@ -889,14 +985,14 @@ function renderHistory() {
       <img src="${escapeHtml(item.url)}" alt="" onerror="this.style.opacity=0.3"/>
       <div class="history-item-info">
         <div class="history-item-num">#${state.history.length - i}</div>
-        <div class="history-item-url" title="${escapeHtml(item.url)}">${escapeHtml(item.url)}</div>
+        <div class="history-item-url" title="${escapeHtml(item.url)}">${item.url.startsWith('data:') ? '📷 Imagem local' : escapeHtml(item.url)}</div>
       </div>
     `;
     historyList.appendChild(div);
   });
 }
 
-/* ============ ÁUDIO (Web Audio API - sons sintéticos) ============ */
+/* ============ ÁUDIO ============ */
 let audioCtx = null;
 function getAudioCtx() {
   if (!audioCtx) {
@@ -924,7 +1020,7 @@ function playWin() {
   if (state.muted) return;
   const ac = getAudioCtx();
   if (!ac) return;
-  const notes = [523, 659, 784, 1047]; // C E G C
+  const notes = [523, 659, 784, 1047];
   notes.forEach((freq, i) => {
     const osc = ac.createOscillator();
     const gain = ac.createGain();
@@ -949,22 +1045,46 @@ function applyTheme() {
 $('btnLoad').addEventListener('click', () => {
   const raw = linksInput.value;
   const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-  // Remove duplicatas mantendo ordem
   const unique = [...new Set(lines)];
-  state.items = unique;
-  linksInput.value = unique.join('\n');
+  
+  // Manter imagens locais e adicionar novas URLs remotas
+  const localImages = state.items.filter(item => item.startsWith('data:'));
+  state.items = [...localImages, ...unique];
+  
   assignColors();
   state.currentAngle = 0;
   renderWheel();
-  counterHint.textContent = `${unique.length} imagem${unique.length !== 1 ? 'ns' : ''} carregada${unique.length !== 1 ? 's' : ''}`;
+  updateCounter();
   saveState();
-  if (unique.length > 0) showToast('✅ Roleta carregada!');
+  if (state.items.length > 0) showToast('✅ Roleta carregada!');
   else showToast('⚠️ Nenhum link válido encontrado');
 });
 
-linksInput.addEventListener('input', () => {
-  const lines = linksInput.value.split('\n').filter(l => l.trim().length > 0);
-  counterHint.textContent = `${lines.length} linha${lines.length !== 1 ? 's' : ''} detectada${lines.length !== 1 ? 's' : ''}`;
+linksInput.addEventListener('input', updateCounter);
+
+// Upload de imagens
+uploadArea.addEventListener('click', () => imageUpload.click());
+imageUpload.addEventListener('change', (e) => {
+  handleImageUpload(e.target.files);
+  e.target.value = '';
+});
+
+uploadArea.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  uploadArea.style.borderColor = 'var(--primary)';
+  uploadArea.style.background = 'var(--primary-soft)';
+});
+
+uploadArea.addEventListener('dragleave', () => {
+  uploadArea.style.borderColor = '';
+  uploadArea.style.background = '';
+});
+
+uploadArea.addEventListener('drop', (e) => {
+  e.preventDefault();
+  uploadArea.style.borderColor = '';
+  uploadArea.style.background = '';
+  handleImageUpload(e.dataTransfer.files);
 });
 
 $('btnExport').addEventListener('click', () => {
@@ -994,11 +1114,13 @@ $('fileInput').addEventListener('change', e => {
       const data = JSON.parse(ev.target.result);
       if (Array.isArray(data.items)) {
         state.items = data.items;
-        linksInput.value = data.items.join('\n');
+        const remoteUrls = data.items.filter(item => !item.startsWith('data:'));
+        linksInput.value = remoteUrls.join('\n');
         if (data.title) { state.title = data.title; $('titleEdit').value = data.title; }
         assignColors();
         renderWheel();
         saveState();
+        updateCounter();
         showToast('📂 JSON importado!');
       } else {
         showToast('⚠️ JSON inválido');
@@ -1053,10 +1175,11 @@ modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) clo
 $('btnRemove').addEventListener('click', () => {
   if (!state.currentDrawn) return;
   state.items = state.items.filter(u => u !== state.currentDrawn);
-  linksInput.value = state.items.join('\n');
+  const remoteUrls = state.items.filter(item => !item.startsWith('data:'));
+  linksInput.value = remoteUrls.join('\n');
   assignColors();
   renderWheel();
-  counterHint.textContent = `${state.items.length} imagem${state.items.length !== 1 ? 'ns' : ''} carregada${state.items.length !== 1 ? 's' : ''}`;
+  updateCounter();
   saveState();
   closeModal();
   showToast('⭐ Imagem removida da roleta');
@@ -1079,7 +1202,6 @@ $('btnClearHistory').addEventListener('click', () => {
   }
 });
 
-// Atalhos de teclado
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if (e.key === 'Escape') {
@@ -1100,7 +1222,7 @@ document.addEventListener('keydown', e => {
 applyTheme();
 document.title = state.title + ' — RoletArtes';
 loadState();
-counterHint.textContent = `${state.items.length} imagem${state.items.length !== 1 ? 'ns' : ''} carregada${state.items.length !== 1 ? 's' : ''}`;
+updateCounter();
 </script>
 
 </body>
