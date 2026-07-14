@@ -28,14 +28,6 @@
 - `ESPAÇO` — girar a roleta
 - `ESC` — fechar modais
 
-## 📦 Deploy no GitHub Pages
-
-1. Crie um repositório no GitHub (ex.: `roletartes`)
-2. Faça upload dos 3 arquivos (`index.html`, `style.css`, `script.js`)
-3. Vá em **Settings → Pages**
-4. Selecione a branch `main` e pasta `/root`
-5. Acesse a URL: `https://SEU-USUARIO.github.io/roletartes/`
-
 ## ⚠️ Limitações
 
 - **localStorage:** ~5MB total (imagens locais em base64 consomem mais espaço)
