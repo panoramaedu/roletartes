@@ -30,9 +30,9 @@
 <main>
   <!-- PAINEL ESQUERDO: ENTRADA -->
   <section class="panel">
-    <h2>📥 Links das imagens</h2>
-    <textarea id="linksInput" placeholder="Cole aqui os links das imagens, um por linha...&#10;&#10;Ex:&#10;https://exemplo.com/img1.jpg&#10;https://exemplo.com/img2.png"></textarea>
-    <p class="hint" id="counterHint">0 imagens carregadas</p>
+    <h2>📥 Itens da roleta</h2>
+    <textarea id="linksInput" placeholder="Cole links de imagens OU textos, um por linha...&#10;&#10;Exemplo:&#10;https://exemplo.com/img1.jpg&#10;Maria&#10;João&#10;https://exemplo.com/img2.png&#10;Ana"></textarea>
+    <p class="hint" id="counterHint">0 itens carregados</p>
     
     <div class="upload-area" id="uploadArea">
       <div class="upload-area-icon">📤</div>
@@ -57,7 +57,7 @@
     <div id="wheelArea">
       <div class="wheel-empty" id="wheelEmpty">
         <div class="wheel-empty-icon">🎡</div>
-        <p>Cole os links das imagens ao lado e clique em <strong>Carregar</strong> para começar.</p>
+        <p>Cole links de imagens ou textos ao lado e clique em <strong>Carregar</strong> para começar.</p>
       </div>
       <div class="wheel-wrapper" id="wheelWrapper" style="display:none;">
         <div class="wheel-pointer"></div>
@@ -80,11 +80,11 @@
   </aside>
 </main>
 
-<!-- MODAL DE IMAGEM SORTEADA -->
+<!-- MODAL DE ITEM SORTEADO -->
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal">
     <div class="modal-header">
-      <h3>🎉 Imagem sorteada!</h3>
+      <h3 id="modalTitle">🎉 Sorteado!</h3>
       <button class="modal-close" id="modalClose">×</button>
     </div>
     <div class="modal-body">
@@ -104,6 +104,7 @@
 <div class="presentation-overlay" id="presentationOverlay">
   <button class="presentation-close" id="presentationClose">×</button>
   <img id="presentationImg" src="" alt="" />
+  <div class="presentation-text" id="presentationText"></div>
 </div>
 
 <!-- TOAST -->
