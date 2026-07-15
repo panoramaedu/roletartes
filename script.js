@@ -1,6 +1,6 @@
 /* ============ ESTADO GLOBAL ============ */
 const state = {
-  items: [],          // URLs ou data URLs carregadas
+  items: [],          // URLs, data URLs ou textos
   colors: [],         // Cores atribuídas a cada item
   spinning: false,
   currentAngle: 0,
@@ -9,23 +9,13 @@ const state = {
   theme: 'light',
   title: 'Minha Roleta',
   presentationMode: false,
-  currentDrawn: null  // URL atualmente exibida no modal
+  currentDrawn: null  // Item atualmente exibido no modal
 };
 
 /* ============ PALETA EDUCACIONAL ============ */
 const PALETTE = [
-  '#7c3aed', // púrpura
-  '#06b6d4', // ciano
-  '#f59e0b', // âmbar
-  '#10b981', // esmeralda
-  '#ec4899', // rosa
-  '#3b82f6', // azul
-  '#ef4444', // vermelho
-  '#84cc16', // lima
-  '#f97316', // laranja
-  '#8b5cf6', // violeta
-  '#14b8a6', // teal
-  '#eab308'  // amarelo
+  '#7c3aed', '#06b6d4', '#f59e0b', '#10b981', '#ec4899', '#3b82f6',
+  '#ef4444', '#84cc16', '#f97316', '#8b5cf6', '#14b8a6', '#eab308'
 ];
 
 /* ============ ELEMENTOS ============ */
@@ -40,9 +30,10 @@ const historyList = $('historyList');
 const historyCount = $('historyCount');
 const modalOverlay = $('modalOverlay');
 const modalImageWrap = $('modalImageWrap');
-const modalLoader = $('modalLoader');
+const modalTitle = $('modalTitle');
 const presentationOverlay = $('presentationOverlay');
 const presentationImg = $('presentationImg');
+const presentationText = $('presentationText');
 const toast = $('toast');
 const ctx = wheelCanvas.getContext('2d');
 const uploadArea = $('uploadArea');
@@ -57,10 +48,19 @@ function showToast(msg) {
   toast._t = setTimeout(() => toast.classList.remove('show'), 2500);
 }
 
+/* Detecta se um item é imagem ou texto */
+function getItemType(item) {
+  if (!item) return 'text';
+  if (item.startsWith('http://') || item.startsWith('https://') || item.startsWith('data:image/')) {
+    return 'image';
+  }
+  return 'text';
+}
+
 function checkStorageQuota() {
   try {
     const used = JSON.stringify(state.items).length;
-    const limit = 5 * 1024 * 1024; // 5MB
+    const limit = 5 * 1024 * 1024;
     if (used > limit * 0.8) {
       storageWarning.classList.add('show');
       return false;
@@ -83,7 +83,7 @@ function saveState() {
     checkStorageQuota();
   } catch(e) {
     if (e.name === 'QuotaExceededError') {
-      showToast('⚠️ localStorage cheio! Remova algumas imagens.');
+      showToast('⚠️ localStorage cheio! Remova alguns itens.');
       storageWarning.classList.add('show');
     }
   }
@@ -102,8 +102,7 @@ function loadState() {
     if (muted === 'true') { state.muted = true; $('btnMute').textContent = '🔇'; }
     if (history) state.history = JSON.parse(history);
     if (state.items.length) {
-      const remoteUrls = state.items.filter(item => !item.startsWith('data:'));
-      linksInput.value = remoteUrls.join('\n');
+      linksInput.value = state.items.join('\n');
       assignColors();
       renderWheel();
     }
@@ -133,10 +132,11 @@ function handleImageUpload(files) {
       processed++;
       
       if (processed === total) {
+        linksInput.value = state.items.join('\n');
         assignColors();
         renderWheel();
         saveState();
-        showToast(`✅ ${total} imagem${total > 1 ? 'ns' : ''} carregada${total > 1 ? 's' : ''}`);
+        showToast(`✅ ${total} imagem${total > 1 ? 'ns' : ''} adicionada${total > 1 ? 's' : ''}`);
         updateCounter();
       }
     };
@@ -151,10 +151,10 @@ function handleImageUpload(files) {
 }
 
 function updateCounter() {
-  const remoteCount = linksInput.value.split('\n').filter(l => l.trim().length > 0).length;
-  const localCount = state.items.filter(item => item.startsWith('data:')).length;
-  const total = remoteCount + localCount;
-  counterHint.textContent = `${total} imagem${total !== 1 ? 'ns' : ''} (${localCount} local${localCount !== 1 ? 'is' : ''}, ${remoteCount} link${remoteCount !== 1 ? 's' : ''})`;
+  const total = state.items.length;
+  const imageCount = state.items.filter(item => getItemType(item) === 'image').length;
+  const textCount = total - imageCount;
+  counterHint.textContent = `${total} ite${total !== 1 ? 'ns' : 'm'} (${imageCount} image${imageCount !== 1 ? 'ns' : 'm'}, ${textCount} texto${textCount !== 1 ? 's' : ''})`;
 }
 
 /* ============ CORES SEM REPETIÇÃO ADJACENTE ============ */
@@ -206,6 +206,7 @@ function renderWheel() {
     const start = state.currentAngle + i * sliceAngle;
     const end = start + sliceAngle;
     
+    // Fatia
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.arc(cx, cy, r, start, end);
@@ -213,27 +214,58 @@ function renderWheel() {
     ctx.fillStyle = state.colors[i];
     ctx.fill();
     
+    // Borda entre fatias
     ctx.strokeStyle = 'rgba(255,255,255,0.3)';
     ctx.lineWidth = 2;
     ctx.stroke();
     
-    if (n <= 30) {
-      const mid = start + sliceAngle / 2;
-      const tr = r * 0.75;
-      const tx = cx + Math.cos(mid) * tr;
-      const ty = cy + Math.sin(mid) * tr;
-      ctx.save();
-      ctx.translate(tx, ty);
-      ctx.rotate(mid + Math.PI / 2);
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      ctx.font = `bold ${Math.max(12, Math.min(20, 400/n))}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+    // Texto ou número dentro da fatia
+    const mid = start + sliceAngle / 2;
+    const tr = r * 0.72;
+    const tx = cx + Math.cos(mid) * tr;
+    const ty = cy + Math.sin(mid) * tr;
+    
+    ctx.save();
+    ctx.translate(tx, ty);
+    ctx.rotate(mid + Math.PI / 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowBlur = 3;
+    
+    const item = state.items[i];
+    const type = getItemType(item);
+    const sliceDeg = (sliceAngle * 180) / Math.PI;
+    
+    if (type === 'text' && sliceDeg >= 12 && n <= 40) {
+      // Item de texto: mostrar o texto truncado
+      const fontSize = Math.max(10, Math.min(18, (sliceAngle * r * 0.4)));
+      ctx.font = `bold ${fontSize}px Fredoka, sans-serif`;
+      
+      // Calcular largura máxima aproximada
+      const maxArcLen = sliceAngle * r * 0.85;
+      let displayText = item;
+      ctx.font = `bold ${fontSize}px Fredoka, sans-serif`;
+      
+      // Truncar se necessário
+      while (ctx.measureText(displayText).width > maxArcLen && displayText.length > 1) {
+        displayText = displayText.slice(0, -1);
+      }
+      if (displayText !== item) displayText += '…';
+      
+      ctx.fillText(displayText, 0, 0);
+    } else {
+      // Imagem ou fatia pequena: mostrar número
+      const fontSize = Math.max(12, Math.min(22, 400/n));
+      ctx.font = `bold ${fontSize}px Fredoka, sans-serif`;
       ctx.fillText(i + 1, 0, 0);
-      ctx.restore();
     }
+    
+    ctx.restore();
   }
   
+  // Borda externa
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.strokeStyle = 'rgba(255,255,255,0.2)';
@@ -296,30 +328,44 @@ function spinWheel() {
 
 /* ============ SORTEIO E MODAL ============ */
 function drawItem(index) {
-  const url = state.items[index];
-  state.currentDrawn = url;
+  const item = state.items[index];
+  state.currentDrawn = item;
   wheelStatus.textContent = 'Sorteado!';
-  showModal(url);
-  addToHistory(url);
+  showModal(item);
+  addToHistory(item);
 }
 
-function showModal(url) {
+function showModal(item) {
   modalOverlay.classList.add('active');
   modalImageWrap.innerHTML = '';
-  const loader = document.createElement('div');
-  loader.className = 'loader';
-  modalImageWrap.appendChild(loader);
+  modalImageWrap.classList.remove('text-mode');
   
-  const img = new Image();
-  img.onload = () => {
-    modalImageWrap.innerHTML = '';
-    modalImageWrap.appendChild(img);
-  };
-  img.onerror = () => {
-    modalImageWrap.innerHTML = '<div class="error-msg">⚠️ Não foi possível carregar a imagem.</div>';
-  };
-  img.src = url;
-  img.alt = 'Imagem sorteada';
+  const type = getItemType(item);
+  
+  if (type === 'image') {
+    modalTitle.textContent = '🎉 Imagem sorteada!';
+    const loader = document.createElement('div');
+    loader.className = 'loader';
+    modalImageWrap.appendChild(loader);
+    
+    const img = new Image();
+    img.onload = () => {
+      modalImageWrap.innerHTML = '';
+      modalImageWrap.appendChild(img);
+    };
+    img.onerror = () => {
+      modalImageWrap.innerHTML = '<div class="error-msg">⚠️ Não foi possível carregar a imagem.</div>';
+    };
+    img.src = item;
+    img.alt = 'Imagem sorteada';
+  } else {
+    modalTitle.textContent = '🎉 Sorteado!';
+    modalImageWrap.classList.add('text-mode');
+    const textDiv = document.createElement('div');
+    textDiv.className = 'text-display';
+    textDiv.textContent = item;
+    modalImageWrap.appendChild(textDiv);
+  }
 }
 
 function closeModal() {
@@ -333,8 +379,8 @@ function escapeHtml(s) {
 }
 
 /* ============ HISTÓRICO ============ */
-function addToHistory(url) {
-  state.history.unshift({ url, time: Date.now() });
+function addToHistory(item) {
+  state.history.unshift({ url: item, time: Date.now() });
   if (state.history.length > 50) state.history.pop();
   renderHistory();
   saveState();
@@ -350,11 +396,30 @@ function renderHistory() {
   state.history.forEach((item, i) => {
     const div = document.createElement('div');
     div.className = 'history-item';
+    
+    const type = getItemType(item.url);
+    let mediaHtml;
+    
+    if (type === 'image') {
+      mediaHtml = `<img src="${escapeHtml(item.url)}" alt="" onerror="this.style.opacity=0.3"/>`;
+    } else {
+      mediaHtml = `<div class="history-text-icon">📝</div>`;
+    }
+    
+    let displayUrl;
+    if (type === 'text') {
+      displayUrl = escapeHtml(item.url);
+    } else if (item.url.startsWith('data:')) {
+      displayUrl = '📷 Imagem local';
+    } else {
+      displayUrl = escapeHtml(item.url);
+    }
+    
     div.innerHTML = `
-      <img src="${escapeHtml(item.url)}" alt="" onerror="this.style.opacity=0.3"/>
+      ${mediaHtml}
       <div class="history-item-info">
         <div class="history-item-num">#${state.history.length - i}</div>
-        <div class="history-item-url" title="${escapeHtml(item.url)}">${item.url.startsWith('data:') ? '📷 Imagem local' : escapeHtml(item.url)}</div>
+        <div class="history-item-url ${type === 'text' ? 'text-item' : ''}" title="${escapeHtml(item.url)}">${displayUrl}</div>
       </div>
     `;
     historyList.appendChild(div);
@@ -416,19 +481,20 @@ $('btnLoad').addEventListener('click', () => {
   const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
   const unique = [...new Set(lines)];
   
-  const localImages = state.items.filter(item => item.startsWith('data:'));
-  state.items = [...localImages, ...unique];
-  
+  state.items = unique;
   assignColors();
   state.currentAngle = 0;
   renderWheel();
   updateCounter();
   saveState();
   if (state.items.length > 0) showToast('✅ Roleta carregada!');
-  else showToast('⚠️ Nenhum link válido encontrado');
+  else showToast('⚠️ Nenhum item válido encontrado');
 });
 
-linksInput.addEventListener('input', updateCounter);
+linksInput.addEventListener('input', () => {
+  const lines = linksInput.value.split('\n').filter(l => l.trim().length > 0);
+  counterHint.textContent = `${lines.length} linha${lines.length !== 1 ? 's' : ''} detectada${lines.length !== 1 ? 's' : ''}`;
+});
 
 // Upload de imagens
 uploadArea.addEventListener('click', () => imageUpload.click());
@@ -482,8 +548,7 @@ $('fileInput').addEventListener('change', e => {
       const data = JSON.parse(ev.target.result);
       if (Array.isArray(data.items)) {
         state.items = data.items;
-        const remoteUrls = data.items.filter(item => !item.startsWith('data:'));
-        linksInput.value = remoteUrls.join('\n');
+        linksInput.value = data.items.join('\n');
         if (data.title) { state.title = data.title; $('titleEdit').value = data.title; }
         assignColors();
         renderWheel();
@@ -522,16 +587,27 @@ $('btnMute').addEventListener('click', () => {
 
 $('btnPresent').addEventListener('click', () => {
   if (!state.currentDrawn) {
-    showToast('⚠️ Sorteie uma imagem primeiro');
+    showToast('⚠️ Sorteie um item primeiro');
     return;
   }
-  presentationImg.src = state.currentDrawn;
+  
+  const type = getItemType(state.currentDrawn);
+  presentationOverlay.classList.remove('text-mode');
+  
+  if (type === 'image') {
+    presentationImg.src = state.currentDrawn;
+  } else {
+    presentationText.textContent = state.currentDrawn;
+    presentationOverlay.classList.add('text-mode');
+  }
+  
   presentationOverlay.classList.add('active');
   state.presentationMode = true;
 });
 
 $('presentationClose').addEventListener('click', () => {
   presentationOverlay.classList.remove('active');
+  presentationOverlay.classList.remove('text-mode');
   state.presentationMode = false;
 });
 
@@ -543,14 +619,13 @@ modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) clo
 $('btnRemove').addEventListener('click', () => {
   if (!state.currentDrawn) return;
   state.items = state.items.filter(u => u !== state.currentDrawn);
-  const remoteUrls = state.items.filter(item => !item.startsWith('data:'));
-  linksInput.value = remoteUrls.join('\n');
+  linksInput.value = state.items.join('\n');
   assignColors();
   renderWheel();
   updateCounter();
   saveState();
   closeModal();
-  showToast('⭐ Imagem removida da roleta');
+  showToast('⭐ Item removido da roleta');
 });
 
 $('btnContinue').addEventListener('click', closeModal);
@@ -575,6 +650,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if (state.presentationMode) {
       presentationOverlay.classList.remove('active');
+      presentationOverlay.classList.remove('text-mode');
       state.presentationMode = false;
     } else if (modalOverlay.classList.contains('active')) {
       closeModal();
