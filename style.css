@@ -19,6 +19,11 @@
   --radius: 14px;
   --radius-sm: 8px;
   --transition: 0.25s ease;
+  
+  /* Fontes */
+  --font-display: 'Fredoka', system-ui, sans-serif;
+  --font-body: 'Nunito', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
 [data-theme="dark"] {
@@ -37,7 +42,8 @@
 
 html, body { height: 100%; }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  font-family: var(--font-body);
+  font-weight: 500;
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
@@ -63,15 +69,16 @@ header {
 }
 
 .logo {
-  font-size: 1.4rem;
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 700;
   color: var(--primary);
   letter-spacing: -0.5px;
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.logo-icon { font-size: 1.6rem; }
+.logo-icon { font-size: 1.7rem; }
 
 .title-edit {
   flex: 1;
@@ -79,8 +86,9 @@ header {
   background: transparent;
   border: 1px dashed transparent;
   color: var(--text);
+  font-family: var(--font-body);
   font-size: 1rem;
-  font-weight: 500;
+  font-weight: 600;
   padding: 6px 10px;
   border-radius: var(--radius-sm);
   transition: border-color var(--transition), background var(--transition);
@@ -130,8 +138,9 @@ main {
 }
 
 .panel h2 {
-  font-size: 1rem;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 600;
   margin-bottom: 12px;
   color: var(--text);
   display: flex;
@@ -139,12 +148,13 @@ main {
   gap: 8px;
 }
 .panel h2 .badge {
+  font-family: var(--font-body);
   background: var(--primary-soft);
   color: var(--primary);
   font-size: 0.75rem;
   padding: 2px 8px;
   border-radius: 999px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 /* ============ PAINEL DE ENTRADA ============ */
@@ -156,27 +166,31 @@ textarea {
   border-radius: var(--radius-sm);
   background: var(--bg);
   color: var(--text);
-  font-family: "SF Mono", Monaco, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 0.85rem;
+  font-weight: 400;
   resize: vertical;
   transition: border-color var(--transition);
+  line-height: 1.6;
 }
 textarea:focus { outline: none; border-color: var(--primary); }
 
 .hint {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   color: var(--text-soft);
   margin: 8px 0 12px;
+  font-weight: 500;
 }
 
 .storage-warning {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--danger);
   background: rgba(220, 38, 38, 0.1);
-  padding: 8px;
+  padding: 10px;
   border-radius: var(--radius-sm);
   margin: 8px 0;
   display: none;
+  font-weight: 600;
 }
 .storage-warning.show { display: block; }
 
@@ -186,7 +200,8 @@ textarea:focus { outline: none; border-color: var(--primary); }
   padding: 9px 14px;
   border-radius: var(--radius-sm);
   border: none;
-  font-weight: 600;
+  font-family: var(--font-body);
+  font-weight: 700;
   font-size: 0.9rem;
   cursor: pointer;
   transition: all var(--transition);
@@ -220,7 +235,7 @@ textarea:focus { outline: none; border-color: var(--primary); }
   background: var(--primary-soft);
 }
 .upload-area-icon { font-size: 1.5rem; margin-bottom: 4px; }
-.upload-area-text { font-size: 0.85rem; color: var(--text-soft); }
+.upload-area-text { font-size: 0.85rem; color: var(--text-soft); font-weight: 600; }
 
 /* ============ ROLETA ============ */
 .wheel-container {
@@ -284,7 +299,9 @@ canvas.wheel.spinning { cursor: not-allowed; }
   margin-top: 16px;
   text-align: center;
   color: var(--text-soft);
-  font-size: 0.9rem;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 500;
   min-height: 24px;
 }
 
@@ -294,6 +311,7 @@ canvas.wheel.spinning { cursor: not-allowed; }
   padding: 40px 20px;
 }
 .wheel-empty-icon { font-size: 3rem; margin-bottom: 10px; opacity: 0.5; }
+.wheel-empty p { font-weight: 500; }
 
 /* ============ HISTÓRICO ============ */
 .history-list {
@@ -324,12 +342,14 @@ canvas.wheel.spinning { cursor: not-allowed; }
 }
 .history-item-info { flex: 1; min-width: 0; }
 .history-item-num {
-  font-size: 0.7rem;
+  font-family: var(--font-display);
+  font-size: 0.75rem;
   color: var(--text-soft);
   font-weight: 600;
 }
 .history-item-url {
-  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
@@ -341,6 +361,7 @@ canvas.wheel.spinning { cursor: not-allowed; }
   color: var(--text-soft);
   font-size: 0.85rem;
   padding: 20px 0;
+  font-weight: 500;
 }
 
 /* ============ MODAL ============ */
@@ -381,7 +402,11 @@ canvas.wheel.spinning { cursor: not-allowed; }
   align-items: center;
   justify-content: space-between;
 }
-.modal-header h3 { font-size: 1.05rem; font-weight: 700; }
+.modal-header h3 {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 600;
+}
 
 .modal-close {
   background: transparent;
@@ -439,6 +464,7 @@ canvas.wheel.spinning { cursor: not-allowed; }
   font-size: 0.9rem;
   text-align: center;
   padding: 20px;
+  font-weight: 600;
 }
 
 .modal-actions {
@@ -452,7 +478,9 @@ canvas.wheel.spinning { cursor: not-allowed; }
 .btn-highlight {
   background: var(--primary);
   color: white;
-  font-size: 1rem;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
   padding: 12px 20px;
   box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
 }
@@ -499,8 +527,9 @@ canvas.wheel.spinning { cursor: not-allowed; }
   color: var(--bg);
   padding: 10px 18px;
   border-radius: var(--radius-sm);
+  font-family: var(--font-body);
   font-size: 0.9rem;
-  font-weight: 500;
+  font-weight: 600;
   z-index: 300;
   transition: transform 0.3s ease;
   box-shadow: var(--shadow-lg);
@@ -515,10 +544,11 @@ canvas.wheel.spinning { cursor: not-allowed; }
 
 @media (max-width: 600px) {
   header { padding: 10px 14px; }
-  .logo { font-size: 1.1rem; }
+  .logo { font-size: 1.3rem; }
   .title-edit { font-size: 0.9rem; order: 3; width: 100%; }
   main { padding: 12px; gap: 12px; }
   .panel { padding: 14px; }
+  .panel h2 { font-size: 1.05rem; }
   .wheel-wrapper { width: min(340px, 90vw); }
   .wheel-center { width: 44px; height: 44px; font-size: 1.2rem; }
   .modal { width: 95vw; }
