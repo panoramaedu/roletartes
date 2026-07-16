@@ -1,7 +1,10 @@
+/* ============ DETECÇÃO DE MODO OFFLINE ============ */
+const IS_OFFLINE = window.IS_OFFLINE_VERSION === true;
+
 /* ============ ESTADO GLOBAL ============ */
 const state = {
-  items: [],          // URLs, data URLs ou textos
-  colors: [],         // Cores atribuídas a cada item
+  items: [],
+  colors: [],
   spinning: false,
   currentAngle: 0,
   history: [],
@@ -9,7 +12,7 @@ const state = {
   theme: 'light',
   title: 'Minha Roleta',
   presentationMode: false,
-  currentDrawn: null  // Item atualmente exibido no modal
+  currentDrawn: null
 };
 
 /* ============ PALETA EDUCACIONAL ============ */
@@ -39,6 +42,9 @@ const ctx = wheelCanvas.getContext('2d');
 const uploadArea = $('uploadArea');
 const imageUpload = $('imageUpload');
 const storageWarning = $('storageWarning');
+const offlineSection = $('offlineSection');
+const offlineHint = $('offlineHint');
+const btnOffline = $('btnOffline');
 
 /* ============ UTILITÁRIOS ============ */
 function showToast(msg) {
@@ -48,7 +54,6 @@ function showToast(msg) {
   toast._t = setTimeout(() => toast.classList.remove('show'), 2500);
 }
 
-/* Detecta se um item é imagem ou texto */
 function getItemType(item) {
   if (!item) return 'text';
   if (item.startsWith('http://') || item.startsWith('https://') || item.startsWith('data:image/')) {
@@ -58,6 +63,7 @@ function getItemType(item) {
 }
 
 function checkStorageQuota() {
+  if (IS_OFFLINE) return true;
   try {
     const used = JSON.stringify(state.items).length;
     const limit = 5 * 1024 * 1024;
@@ -74,6 +80,7 @@ function checkStorageQuota() {
 }
 
 function saveState() {
+  if (IS_OFFLINE) return; // Não salvar no modo offline
   try {
     localStorage.setItem('roletartes_links', JSON.stringify(state.items));
     localStorage.setItem('roletartes_title', state.title);
@@ -90,6 +97,36 @@ function saveState() {
 }
 
 function loadState() {
+  // MODO OFFLINE: usar dados embutidos
+  if (IS_OFFLINE && window.OFFLINE_DATA) {
+    state.items = window.OFFLINE_DATA.items || [];
+    state.title = window.OFFLINE_DATA.title || 'RoletArtes Offline';
+    state.theme = window.OFFLINE_DATA.theme || 'light';
+    state.muted = window.OFFLINE_DATA.muted || false;
+    
+    $('titleEdit').value = state.title;
+    document.title = state.title + ' — RoletArtes Offline';
+    applyTheme();
+    
+    if (state.muted) {
+      $('btnMute').textContent = '🔇';
+    }
+    
+    if (state.items.length) {
+      linksInput.value = state.items.join('\n');
+      assignColors();
+      renderWheel();
+    }
+    
+    // Ajustar UI para modo offline
+    if (offlineSection) offlineSection.style.display = 'none';
+    if (offlineHint) offlineHint.style.display = 'block';
+    
+    updateCounter();
+    return;
+  }
+  
+  // MODO ONLINE: comportamento normal
   try {
     const links = localStorage.getItem('roletartes_links');
     const title = localStorage.getItem('roletartes_title');
@@ -113,6 +150,11 @@ function loadState() {
 
 /* ============ UPLOAD DE IMAGENS ============ */
 function handleImageUpload(files) {
+  if (IS_OFFLINE) {
+    showToast('⚠️ Modo offline: não é possível adicionar novas imagens');
+    return;
+  }
+  
   const fileArray = Array.from(files);
   if (fileArray.length === 0) return;
   
@@ -206,7 +248,6 @@ function renderWheel() {
     const start = state.currentAngle + i * sliceAngle;
     const end = start + sliceAngle;
     
-    // Fatia
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.arc(cx, cy, r, start, end);
@@ -214,12 +255,10 @@ function renderWheel() {
     ctx.fillStyle = state.colors[i];
     ctx.fill();
     
-    // Borda entre fatias
     ctx.strokeStyle = 'rgba(255,255,255,0.3)';
     ctx.lineWidth = 2;
     ctx.stroke();
     
-    // Texto ou número dentro da fatia
     const mid = start + sliceAngle / 2;
     const tr = r * 0.72;
     const tx = cx + Math.cos(mid) * tr;
@@ -239,16 +278,13 @@ function renderWheel() {
     const sliceDeg = (sliceAngle * 180) / Math.PI;
     
     if (type === 'text' && sliceDeg >= 12 && n <= 40) {
-      // Item de texto: mostrar o texto truncado
       const fontSize = Math.max(10, Math.min(18, (sliceAngle * r * 0.4)));
       ctx.font = `bold ${fontSize}px Fredoka, sans-serif`;
       
-      // Calcular largura máxima aproximada
       const maxArcLen = sliceAngle * r * 0.85;
       let displayText = item;
       ctx.font = `bold ${fontSize}px Fredoka, sans-serif`;
       
-      // Truncar se necessário
       while (ctx.measureText(displayText).width > maxArcLen && displayText.length > 1) {
         displayText = displayText.slice(0, -1);
       }
@@ -256,7 +292,6 @@ function renderWheel() {
       
       ctx.fillText(displayText, 0, 0);
     } else {
-      // Imagem ou fatia pequena: mostrar número
       const fontSize = Math.max(12, Math.min(22, 400/n));
       ctx.font = `bold ${fontSize}px Fredoka, sans-serif`;
       ctx.fillText(i + 1, 0, 0);
@@ -265,7 +300,6 @@ function renderWheel() {
     ctx.restore();
   }
   
-  // Borda externa
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.strokeStyle = 'rgba(255,255,255,0.2)';
@@ -475,6 +509,178 @@ function applyTheme() {
   $('btnTheme').textContent = state.theme === 'dark' ? '☀️' : '🌙';
 }
 
+/* ============ GERAR VERSÃO OFFLINE ============ */
+async function generateOfflineHTML() {
+  if (state.items.length === 0) {
+    showToast('⚠️ Adicione itens à roleta primeiro');
+    return;
+  }
+  
+  btnOffline.disabled = true;
+  btnOffline.textContent = '⏳ Gerando...';
+  
+  try {
+    // Buscar CSS e JS atuais
+    const [cssText, jsText] = await Promise.all([
+      fetch('style.css').then(r => r.text()),
+      fetch('script.js').then(r => r.text())
+    ]);
+    
+    // Dados a embutir
+    const offlineData = {
+      items: state.items,
+      title: state.title,
+      theme: state.theme,
+      muted: state.muted,
+      generatedAt: new Date().toISOString()
+    };
+    
+    // Montar HTML completo
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${escapeHtml(state.title)} — RoletArtes Offline</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎨</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+${cssText}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span class="logo-icon">🎨</span> RoletArtes</div>
+  <input type="text" class="title-edit" id="titleEdit" placeholder="Digite o título da roleta..." value="${escapeHtml(state.title)}" />
+  <div class="header-actions">
+    <button class="icon-btn" id="btnMute" title="Ativar/desativar som">${state.muted ? '🔇' : '🔊'}</button>
+    <button class="icon-btn" id="btnTheme" title="Alternar tema">${state.theme === 'dark' ? '☀️' : '🌙'}</button>
+    <button class="icon-btn" id="btnPresent" title="Modo apresentação">⛶</button>
+  </div>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>📥 Itens da roleta</h2>
+    <textarea id="linksInput" placeholder="Itens carregados...">${escapeHtml(state.items.join('\\n'))}</textarea>
+    <p class="hint" id="counterHint">0 itens carregados</p>
+    
+    <div class="upload-area" id="uploadArea" style="display:none;">
+      <div class="upload-area-icon">📤</div>
+      <div class="upload-area-text">Clique ou arraste imagens aqui</div>
+    </div>
+    <input type="file" id="imageUpload" class="file-input" accept="image/*" multiple />
+    
+    <div class="storage-warning" id="storageWarning">
+      ⚠️ Atenção: localStorage tem limite de ~5MB.
+    </div>
+    
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnLoad">🎯 Carregar</button>
+      <button class="btn btn-secondary" id="btnExport">💾 Exportar JSON</button>
+      <button class="btn btn-secondary" id="btnImport">📂 Importar</button>
+      <input type="file" id="fileInput" class="file-input" accept=".json" />
+    </div>
+    
+    <p class="offline-hint" id="offlineHint" style="display:block;">
+      💡 Esta é uma versão offline. Os dados já estão embutidos neste arquivo.
+    </p>
+  </section>
+
+  <section class="panel wheel-container">
+    <div id="wheelArea">
+      <div class="wheel-empty" id="wheelEmpty" style="display:none;">
+        <div class="wheel-empty-icon">🎡</div>
+        <p>Nenhum item carregado.</p>
+      </div>
+      <div class="wheel-wrapper" id="wheelWrapper" style="display:block;">
+        <div class="wheel-pointer"></div>
+        <canvas class="wheel" id="wheelCanvas" width="600" height="600"></canvas>
+        <div class="wheel-center">🎨</div>
+      </div>
+    </div>
+    <div class="wheel-status" id="wheelStatus">Clique na roleta para girar</div>
+  </section>
+
+  <aside class="panel">
+    <h2>📜 Histórico <span class="badge" id="historyCount">0</span></h2>
+    <div class="history-list" id="historyList">
+      <div class="history-empty">Nenhum sorteio ainda.</div>
+    </div>
+    <div class="btn-row" style="margin-top: 12px;">
+      <button class="btn btn-ghost" id="btnClearHistory" style="flex:1;">🗑️ Limpar histórico</button>
+    </div>
+  </aside>
+</main>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modalTitle">🎉 Sorteado!</h3>
+      <button class="modal-close" id="modalClose">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-image-wrap" id="modalImageWrap">
+        <div class="loader" id="modalLoader"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-highlight" id="btnRemove">⭐ Remover</button>
+        <button class="btn btn-secondary" id="btnContinue">▶ Continuar</button>
+        <button class="btn btn-secondary" id="btnRespin">🔄 Sortear de novo</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="presentation-overlay" id="presentationOverlay">
+  <button class="presentation-close" id="presentationClose">×</button>
+  <img id="presentationImg" src="" alt="" />
+  <div class="presentation-text" id="presentationText"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<footer class="app-footer">
+  <p>Plataforma desenvolvida por Gabriel Alves | <a href="https://panoramaedu.onrender.com/" target="_blank" rel="noopener noreferrer">Panorama Educação</a></p>
+  <p class="donation-text">Ajude a manter essa ferramenta! <a href="https://exemplo.com/doacao" target="_blank" rel="noopener noreferrer" class="donation-link">Faça uma doação! ❤️</a></p>
+</footer>
+
+<script>
+window.IS_OFFLINE_VERSION = true;
+window.OFFLINE_DATA = ${JSON.stringify(offlineData)};
+<\/script>
+
+<script>
+${jsText}
+<\/script>
+</body>
+</html>`;
+    
+    // Criar Blob e disparar download
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const safeTitle = state.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'roletartes';
+    a.href = url;
+    a.download = `${safeTitle}_offline.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showToast('✅ Versão offline gerada com sucesso!');
+  } catch(err) {
+    console.error(err);
+    showToast('⚠️ Erro ao gerar versão offline. Tente hospedar o site primeiro.');
+  } finally {
+    btnOffline.disabled = false;
+    btnOffline.textContent = '📦 Baixar versão offline';
+  }
+}
+
 /* ============ EVENTOS ============ */
 $('btnLoad').addEventListener('click', () => {
   const raw = linksInput.value;
@@ -496,7 +702,6 @@ linksInput.addEventListener('input', () => {
   counterHint.textContent = `${lines.length} linha${lines.length !== 1 ? 's' : ''} detectada${lines.length !== 1 ? 's' : ''}`;
 });
 
-// Upload de imagens
 uploadArea.addEventListener('click', () => imageUpload.click());
 imageUpload.addEventListener('change', (e) => {
   handleImageUpload(e.target.files);
@@ -644,6 +849,11 @@ $('btnClearHistory').addEventListener('click', () => {
     showToast('🗑️ Histórico limpo');
   }
 });
+
+// Handler do botão offline
+if (btnOffline) {
+  btnOffline.addEventListener('click', generateOfflineHTML);
+}
 
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;

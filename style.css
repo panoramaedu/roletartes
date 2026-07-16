@@ -218,6 +218,42 @@ textarea:focus { outline: none; border-color: var(--primary); }
 .btn-ghost:hover { color: var(--primary); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
+/* Botão de versão offline */
+.btn-offline {
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  color: white;
+  width: 100%;
+  justify-content: center;
+  padding: 12px 16px;
+  font-size: 0.95rem;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
+}
+.btn-offline:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.4);
+}
+.btn-offline:disabled {
+  opacity: 0.6;
+  cursor: wait;
+  transform: none;
+}
+
+.offline-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+
+.offline-hint {
+  background: var(--primary-soft);
+  color: var(--primary);
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  text-align: center;
+  font-weight: 600;
+  margin-top: 12px !important;
+}
+
 .file-input { display: none; }
 
 .upload-area {
