@@ -2,7 +2,9 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="RoletArtes — roleta interativa para sorteios em sala de aula, com imagens ou textos, histórico e modo apresentação." />
+  <meta name="theme-color" content="#7c3aed" />
   <title>RoletArtes</title>
   
   <!-- Favicon com emoji 🎨 -->
@@ -18,12 +20,13 @@
 <body>
 
 <header>
-  <div class="logo"><span class="logo-icon">🎨</span> RoletArtes</div>
+  <div class="logo"><span class="logo-icon" aria-hidden="true">🎨</span> RoletArtes</div>
+  <label for="titleEdit" class="sr-only">Título da roleta</label>
   <input type="text" class="title-edit" id="titleEdit" placeholder="Digite o título da roleta..." value="Minha Roleta" />
   <div class="header-actions">
-    <button class="icon-btn" id="btnMute" title="Ativar/desativar som">🔊</button>
-    <button class="icon-btn" id="btnTheme" title="Alternar tema">🌙</button>
-    <button class="icon-btn" id="btnPresent" title="Modo apresentação">⛶</button>
+    <button type="button" class="icon-btn" id="btnMute" title="Ativar/desativar som" aria-label="Ativar ou desativar som" aria-pressed="false">🔊</button>
+    <button type="button" class="icon-btn" id="btnTheme" title="Alternar tema" aria-label="Alternar entre tema claro e escuro">🌙</button>
+    <button type="button" class="icon-btn" id="btnPresent" title="Modo apresentação" aria-label="Abrir modo apresentação">⛶</button>
   </div>
 </header>
 
@@ -31,29 +34,30 @@
   <!-- PAINEL ESQUERDO: ENTRADA -->
   <section class="panel">
     <h2>📥 Itens da roleta</h2>
+    <label for="linksInput" class="sr-only">Itens da roleta, um link de imagem ou texto por linha</label>
     <textarea id="linksInput" placeholder="Cole links de imagens OU textos, um por linha...&#10;&#10;Exemplo:&#10;https://exemplo.com/img1.jpg&#10;Maria&#10;João&#10;https://exemplo.com/img2.png&#10;Ana"></textarea>
-    <p class="hint" id="counterHint">0 itens carregados</p>
+    <p class="hint" id="counterHint" aria-live="polite">0 itens carregados</p>
     
-    <div class="upload-area" id="uploadArea">
-      <div class="upload-area-icon">📤</div>
+    <div class="upload-area" id="uploadArea" role="button" tabindex="0" aria-label="Clique ou arraste imagens aqui para adicionar à roleta">
+      <div class="upload-area-icon" aria-hidden="true">📤</div>
       <div class="upload-area-text">Clique ou arraste imagens aqui</div>
     </div>
-    <input type="file" id="imageUpload" class="file-input" accept="image/*" multiple />
+    <input type="file" id="imageUpload" class="file-input" accept="image/*" multiple aria-hidden="true" tabindex="-1" />
     
-    <div class="storage-warning" id="storageWarning">
+    <div class="storage-warning" id="storageWarning" role="alert">
       ⚠️ Atenção: localStorage tem limite de ~5MB. Muitas imagens podem exceder esse limite.
     </div>
     
     <div class="btn-row">
-      <button class="btn btn-primary" id="btnLoad">🎯 Carregar</button>
-      <button class="btn btn-secondary" id="btnExport">💾 Exportar JSON</button>
-      <button class="btn btn-secondary" id="btnImport">📂 Importar</button>
-      <input type="file" id="fileInput" class="file-input" accept=".json" />
+      <button type="button" class="btn btn-primary" id="btnLoad">🎯 Carregar</button>
+      <button type="button" class="btn btn-secondary" id="btnExport">💾 Exportar JSON</button>
+      <button type="button" class="btn btn-secondary" id="btnImport">📂 Importar</button>
+      <input type="file" id="fileInput" class="file-input" accept=".json" aria-hidden="true" tabindex="-1" />
     </div>
     
     <!-- NOVO: Botão de versão offline -->
     <div class="btn-row offline-section" id="offlineSection" style="margin-top: 10px;">
-      <button class="btn btn-offline" id="btnOffline">📦 Baixar versão offline</button>
+      <button type="button" class="btn btn-offline" id="btnOffline">📦 Baixar versão offline</button>
     </div>
     <p class="hint offline-hint" id="offlineHint" style="display:none;">
       💡 Esta é uma versão offline. Os dados já estão embutidos neste arquivo.
@@ -64,59 +68,62 @@
   <section class="panel wheel-container">
     <div id="wheelArea">
       <div class="wheel-empty" id="wheelEmpty">
-        <div class="wheel-empty-icon">🎡</div>
+        <div class="wheel-empty-icon" aria-hidden="true">🎡</div>
         <p>Cole links de imagens ou textos ao lado e clique em <strong>Carregar</strong> para começar.</p>
       </div>
       <div class="wheel-wrapper" id="wheelWrapper" style="display:none;">
-        <div class="wheel-pointer"></div>
-        <canvas class="wheel" id="wheelCanvas" width="600" height="600"></canvas>
-        <div class="wheel-center">🎨</div>
+        <div class="wheel-pointer" aria-hidden="true"></div>
+        <canvas class="wheel" id="wheelCanvas" width="600" height="600" role="button" tabindex="0" aria-label="Roleta. Pressione Enter ou Espaço para girar."></canvas>
+        <div class="wheel-center" aria-hidden="true">🎨</div>
       </div>
     </div>
-    <div class="wheel-status" id="wheelStatus">Clique na roleta para girar</div>
+    <div class="wheel-status" id="wheelStatus" aria-live="polite">Clique na roleta para girar</div>
   </section>
 
   <!-- PAINEL DIREITO: HISTÓRICO -->
   <aside class="panel">
-    <h2>📜 Histórico <span class="badge" id="historyCount">0</span></h2>
-    <div class="history-list" id="historyList">
+    <h2>📜 Histórico <span class="badge" id="historyCount" aria-live="polite">0</span></h2>
+    <div class="history-list" id="historyList" aria-live="polite">
       <div class="history-empty">Nenhum sorteio ainda.</div>
     </div>
     <div class="btn-row" style="margin-top: 12px;">
-      <button class="btn btn-ghost" id="btnClearHistory" style="flex:1;">🗑️ Limpar histórico</button>
+      <button type="button" class="btn btn-ghost" id="btnClearHistory" style="flex:1;">🗑️ Limpar histórico</button>
     </div>
   </aside>
 </main>
 
 <!-- MODAL DE ITEM SORTEADO -->
 <div class="modal-overlay" id="modalOverlay">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal-header">
       <h3 id="modalTitle">🎉 Sorteado!</h3>
-      <button class="modal-close" id="modalClose">×</button>
+      <button type="button" class="modal-close" id="modalClose" aria-label="Fechar">×</button>
     </div>
     <div class="modal-body">
       <div class="modal-image-wrap" id="modalImageWrap">
-        <div class="loader" id="modalLoader"></div>
+        <div class="loader" id="modalLoader" role="status" aria-label="Carregando"></div>
       </div>
       <div class="modal-actions">
-        <button class="btn btn-highlight" id="btnRemove">⭐ Remover</button>
-        <button class="btn btn-secondary" id="btnContinue">▶ Continuar</button>
-        <button class="btn btn-secondary" id="btnRespin">🔄 Sortear de novo</button>
+        <button type="button" class="btn btn-highlight" id="btnRemove">⭐ Remover</button>
+        <button type="button" class="btn btn-secondary" id="btnContinue">▶ Continuar</button>
+        <button type="button" class="btn btn-secondary" id="btnRespin">🔄 Sortear de novo</button>
       </div>
     </div>
   </div>
 </div>
 
 <!-- MODO APRESENTAÇÃO -->
-<div class="presentation-overlay" id="presentationOverlay">
-  <button class="presentation-close" id="presentationClose">×</button>
+<div class="presentation-overlay" id="presentationOverlay" role="dialog" aria-modal="true" aria-label="Modo apresentação">
+  <button type="button" class="presentation-close" id="presentationClose" aria-label="Fechar modo apresentação">×</button>
   <img id="presentationImg" src="" alt="" />
   <div class="presentation-text" id="presentationText"></div>
 </div>
 
 <!-- TOAST -->
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- CAMADA DE CONFETE -->
+<div class="confetti-layer" id="confettiLayer" aria-hidden="true"></div>
 
 <!-- RODAPÉ -->
 <footer class="app-footer">

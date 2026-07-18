@@ -45,6 +45,28 @@ const storageWarning = $('storageWarning');
 const offlineSection = $('offlineSection');
 const offlineHint = $('offlineHint');
 const btnOffline = $('btnOffline');
+const confettiLayer = $('confettiLayer');
+
+/* ============ ACESSIBILIDADE / PERFORMANCE ============ */
+const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let lastFocusedBeforeOverlay = null;
+
+/* Tamanho lógico (CSS px) do canvas — separado da resolução real do buffer,
+   que é escalada pelo devicePixelRatio para ficar nítida em telas retina. */
+let wheelLogicalSize = 600;
+
+function setupWheelCanvasDPR() {
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const cssSize = wheelCanvas.clientWidth || wheelCanvas.parentElement.clientWidth || 600;
+  wheelLogicalSize = cssSize;
+  const targetW = Math.round(cssSize * dpr);
+  const targetH = Math.round(cssSize * dpr);
+  if (wheelCanvas.width !== targetW || wheelCanvas.height !== targetH) {
+    wheelCanvas.width = targetW;
+    wheelCanvas.height = targetH;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
 
 /* ============ UTILITÁRIOS ============ */
 function showToast(msg) {
@@ -110,6 +132,7 @@ function loadState() {
     
     if (state.muted) {
       $('btnMute').textContent = '🔇';
+      $('btnMute').setAttribute('aria-pressed', 'true');
     }
     
     if (state.items.length) {
@@ -136,7 +159,7 @@ function loadState() {
     if (links) state.items = JSON.parse(links);
     if (title) { state.title = title; $('titleEdit').value = title; }
     if (theme) { state.theme = theme; applyTheme(); }
-    if (muted === 'true') { state.muted = true; $('btnMute').textContent = '🔇'; }
+    if (muted === 'true') { state.muted = true; $('btnMute').textContent = '🔇'; $('btnMute').setAttribute('aria-pressed', 'true'); }
     if (history) state.history = JSON.parse(history);
     if (state.items.length) {
       linksInput.value = state.items.join('\n');
@@ -203,6 +226,7 @@ function updateCounter() {
 function assignColors() {
   const n = state.items.length;
   state.colors = [];
+  state.sliceLabels = null;
   if (n === 0) return;
   const P = PALETTE.length;
   let step = 1;
@@ -226,6 +250,38 @@ function assignColors() {
 
 function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
 
+/* ============ RÓTULOS DAS FATIAS (cache) ============
+   Calculado uma vez por carregamento de itens, não a cada frame da animação. */
+function computeSliceLabels() {
+  const n = state.items.length;
+  state.sliceLabels = [];
+  if (n === 0) return;
+  const size = wheelLogicalSize;
+  const r = size / 2 - 4;
+  const sliceAngle = (Math.PI * 2) / n;
+  const sliceDeg = (sliceAngle * 180) / Math.PI;
+
+  for (let i = 0; i < n; i++) {
+    const item = state.items[i];
+    const type = getItemType(item);
+
+    if (type === 'text' && sliceDeg >= 12 && n <= 40) {
+      const fontSize = Math.max(10, Math.min(18, (sliceAngle * r * 0.4)));
+      ctx.font = `bold ${fontSize}px Fredoka, sans-serif`;
+      const maxArcLen = sliceAngle * r * 0.85;
+      let displayText = item;
+      while (ctx.measureText(displayText).width > maxArcLen && displayText.length > 1) {
+        displayText = displayText.slice(0, -1);
+      }
+      if (displayText !== item) displayText += '…';
+      state.sliceLabels.push({ text: displayText, fontSize });
+    } else {
+      const fontSize = Math.max(12, Math.min(22, 400 / n));
+      state.sliceLabels.push({ text: String(i + 1), fontSize });
+    }
+  }
+}
+
 /* ============ RENDERIZAÇÃO DA ROLETA ============ */
 function renderWheel() {
   const n = state.items.length;
@@ -237,12 +293,15 @@ function renderWheel() {
   wheelEmpty.style.display = 'none';
   wheelWrapper.style.display = 'block';
   
-  const size = wheelCanvas.width;
+  setupWheelCanvasDPR();
+  const size = wheelLogicalSize;
   const cx = size / 2, cy = size / 2;
   const r = size / 2 - 4;
   const sliceAngle = (Math.PI * 2) / n;
   
   ctx.clearRect(0, 0, size, size);
+  
+  if (!state.sliceLabels || state.sliceLabels.length !== n) computeSliceLabels();
   
   for (let i = 0; i < n; i++) {
     const start = state.currentAngle + i * sliceAngle;
@@ -273,29 +332,9 @@ function renderWheel() {
     ctx.shadowColor = 'rgba(0,0,0,0.3)';
     ctx.shadowBlur = 3;
     
-    const item = state.items[i];
-    const type = getItemType(item);
-    const sliceDeg = (sliceAngle * 180) / Math.PI;
-    
-    if (type === 'text' && sliceDeg >= 12 && n <= 40) {
-      const fontSize = Math.max(10, Math.min(18, (sliceAngle * r * 0.4)));
-      ctx.font = `bold ${fontSize}px Fredoka, sans-serif`;
-      
-      const maxArcLen = sliceAngle * r * 0.85;
-      let displayText = item;
-      ctx.font = `bold ${fontSize}px Fredoka, sans-serif`;
-      
-      while (ctx.measureText(displayText).width > maxArcLen && displayText.length > 1) {
-        displayText = displayText.slice(0, -1);
-      }
-      if (displayText !== item) displayText += '…';
-      
-      ctx.fillText(displayText, 0, 0);
-    } else {
-      const fontSize = Math.max(12, Math.min(22, 400/n));
-      ctx.font = `bold ${fontSize}px Fredoka, sans-serif`;
-      ctx.fillText(i + 1, 0, 0);
-    }
+    const label = state.sliceLabels[i];
+    ctx.font = `bold ${label.fontSize}px Fredoka, sans-serif`;
+    ctx.fillText(label.text, 0, 0);
     
     ctx.restore();
   }
@@ -317,13 +356,14 @@ function spinWheel() {
   
   state.spinning = true;
   wheelCanvas.classList.add('spinning');
+  wheelWrapper.classList.add('spinning');
   wheelStatus.textContent = 'Girando...';
   
-  const extraTurns = 5 + Math.random() * 3;
+  const extraTurns = prefersReducedMotion ? 1.2 : (5 + Math.random() * 3);
   const randomFinal = Math.random() * Math.PI * 2;
   const totalRotation = extraTurns * Math.PI * 2 + randomFinal;
   const startAngle = state.currentAngle;
-  const duration = 4500 + Math.random() * 1500;
+  const duration = prefersReducedMotion ? 900 : (4500 + Math.random() * 1500);
   const startTime = performance.now();
   
   let lastTickSlice = -1;
@@ -350,6 +390,7 @@ function spinWheel() {
     } else {
       state.spinning = false;
       wheelCanvas.classList.remove('spinning');
+      wheelWrapper.classList.remove('spinning');
       const finalNormalized = ((pointerAngle - state.currentAngle) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
       const winningIndex = Math.floor(finalNormalized / sliceAngle) % n;
       playWin();
@@ -363,13 +404,16 @@ function spinWheel() {
 /* ============ SORTEIO E MODAL ============ */
 function drawItem(index) {
   const item = state.items[index];
+  const color = state.colors[index] || null;
   state.currentDrawn = item;
   wheelStatus.textContent = 'Sorteado!';
   showModal(item);
-  addToHistory(item);
+  addToHistory(item, color);
+  burstConfetti();
 }
 
 function showModal(item) {
+  lastFocusedBeforeOverlay = document.activeElement;
   modalOverlay.classList.add('active');
   modalImageWrap.innerHTML = '';
   modalImageWrap.classList.remove('text-mode');
@@ -400,21 +444,45 @@ function showModal(item) {
     textDiv.textContent = item;
     modalImageWrap.appendChild(textDiv);
   }
+  
+  requestAnimationFrame(() => $('btnRemove').focus());
 }
 
 function closeModal() {
   modalOverlay.classList.remove('active');
   state.currentDrawn = null;
   wheelStatus.textContent = 'Clique na roleta para girar';
+  if (lastFocusedBeforeOverlay && document.body.contains(lastFocusedBeforeOverlay)) {
+    lastFocusedBeforeOverlay.focus();
+  }
+  lastFocusedBeforeOverlay = null;
 }
+
+function trapFocus(container, e) {
+  const focusables = container.querySelectorAll('button, [href], input, textarea, [tabindex]:not([tabindex="-1"])');
+  if (!focusables.length) return;
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+}
+
+$('modalOverlay').addEventListener('keydown', e => {
+  if (e.key === 'Tab') trapFocus($('modalOverlay').querySelector('.modal'), e);
+});
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 /* ============ HISTÓRICO ============ */
-function addToHistory(item) {
-  state.history.unshift({ url: item, time: Date.now() });
+function addToHistory(item, color) {
+  state.history.unshift({ url: item, time: Date.now(), color: color || 'var(--primary)' });
   if (state.history.length > 50) state.history.pop();
   renderHistory();
   saveState();
@@ -430,14 +498,15 @@ function renderHistory() {
   state.history.forEach((item, i) => {
     const div = document.createElement('div');
     div.className = 'history-item';
+    div.style.setProperty('--item-accent', item.color || 'var(--primary)');
     
     const type = getItemType(item.url);
     let mediaHtml;
     
     if (type === 'image') {
-      mediaHtml = `<img src="${escapeHtml(item.url)}" alt="" onerror="this.style.opacity=0.3"/>`;
+      mediaHtml = `<img src="${escapeHtml(item.url)}" alt="" loading="lazy" onerror="this.style.opacity=0.3"/>`;
     } else {
-      mediaHtml = `<div class="history-text-icon">📝</div>`;
+      mediaHtml = `<div class="history-text-icon" style="background:color-mix(in srgb, ${item.color || 'var(--primary)'} 18%, transparent); color:${item.color || 'var(--primary)'};">📝</div>`;
     }
     
     let displayUrl;
@@ -458,6 +527,23 @@ function renderHistory() {
     `;
     historyList.appendChild(div);
   });
+}
+
+/* ============ CONFETE ============ */
+const CONFETTI_COLORS = ['#7c3aed', '#06b6d4', '#f59e0b', '#10b981', '#ec4899', '#3b82f6'];
+function burstConfetti() {
+  if (prefersReducedMotion || !confettiLayer) return;
+  const count = 46;
+  for (let i = 0; i < count; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = Math.random() * 100 + 'vw';
+    piece.style.background = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
+    piece.style.animationDuration = (2 + Math.random() * 1.4) + 's';
+    piece.style.animationDelay = (Math.random() * 0.3) + 's';
+    confettiLayer.appendChild(piece);
+    piece.addEventListener('animationend', () => piece.remove());
+  }
 }
 
 /* ============ ÁUDIO ============ */
@@ -540,7 +626,8 @@ async function generateOfflineHTML() {
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#7c3aed" />
   <title>${escapeHtml(state.title)} — RoletArtes Offline</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎨</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -553,36 +640,38 @@ ${cssText}
 <body>
 
 <header>
-  <div class="logo"><span class="logo-icon">🎨</span> RoletArtes</div>
+  <div class="logo"><span class="logo-icon" aria-hidden="true">🎨</span> RoletArtes</div>
+  <label for="titleEdit" class="sr-only">Título da roleta</label>
   <input type="text" class="title-edit" id="titleEdit" placeholder="Digite o título da roleta..." value="${escapeHtml(state.title)}" />
   <div class="header-actions">
-    <button class="icon-btn" id="btnMute" title="Ativar/desativar som">${state.muted ? '🔇' : '🔊'}</button>
-    <button class="icon-btn" id="btnTheme" title="Alternar tema">${state.theme === 'dark' ? '☀️' : '🌙'}</button>
-    <button class="icon-btn" id="btnPresent" title="Modo apresentação">⛶</button>
+    <button type="button" class="icon-btn" id="btnMute" title="Ativar/desativar som" aria-label="Ativar ou desativar som" aria-pressed="${state.muted}">${state.muted ? '🔇' : '🔊'}</button>
+    <button type="button" class="icon-btn" id="btnTheme" title="Alternar tema" aria-label="Alternar entre tema claro e escuro">${state.theme === 'dark' ? '☀️' : '🌙'}</button>
+    <button type="button" class="icon-btn" id="btnPresent" title="Modo apresentação" aria-label="Abrir modo apresentação">⛶</button>
   </div>
 </header>
 
 <main>
   <section class="panel">
     <h2>📥 Itens da roleta</h2>
+    <label for="linksInput" class="sr-only">Itens da roleta</label>
     <textarea id="linksInput" placeholder="Itens carregados...">${escapeHtml(state.items.join('\\n'))}</textarea>
-    <p class="hint" id="counterHint">0 itens carregados</p>
+    <p class="hint" id="counterHint" aria-live="polite">0 itens carregados</p>
     
     <div class="upload-area" id="uploadArea" style="display:none;">
-      <div class="upload-area-icon">📤</div>
+      <div class="upload-area-icon" aria-hidden="true">📤</div>
       <div class="upload-area-text">Clique ou arraste imagens aqui</div>
     </div>
-    <input type="file" id="imageUpload" class="file-input" accept="image/*" multiple />
+    <input type="file" id="imageUpload" class="file-input" accept="image/*" multiple aria-hidden="true" tabindex="-1" />
     
-    <div class="storage-warning" id="storageWarning">
+    <div class="storage-warning" id="storageWarning" role="alert">
       ⚠️ Atenção: localStorage tem limite de ~5MB.
     </div>
     
     <div class="btn-row">
-      <button class="btn btn-primary" id="btnLoad">🎯 Carregar</button>
-      <button class="btn btn-secondary" id="btnExport">💾 Exportar JSON</button>
-      <button class="btn btn-secondary" id="btnImport">📂 Importar</button>
-      <input type="file" id="fileInput" class="file-input" accept=".json" />
+      <button type="button" class="btn btn-primary" id="btnLoad">🎯 Carregar</button>
+      <button type="button" class="btn btn-secondary" id="btnExport">💾 Exportar JSON</button>
+      <button type="button" class="btn btn-secondary" id="btnImport">📂 Importar</button>
+      <input type="file" id="fileInput" class="file-input" accept=".json" aria-hidden="true" tabindex="-1" />
     </div>
     
     <p class="offline-hint" id="offlineHint" style="display:block;">
@@ -593,55 +682,57 @@ ${cssText}
   <section class="panel wheel-container">
     <div id="wheelArea">
       <div class="wheel-empty" id="wheelEmpty" style="display:none;">
-        <div class="wheel-empty-icon">🎡</div>
+        <div class="wheel-empty-icon" aria-hidden="true">🎡</div>
         <p>Nenhum item carregado.</p>
       </div>
       <div class="wheel-wrapper" id="wheelWrapper" style="display:block;">
-        <div class="wheel-pointer"></div>
-        <canvas class="wheel" id="wheelCanvas" width="600" height="600"></canvas>
-        <div class="wheel-center">🎨</div>
+        <div class="wheel-pointer" aria-hidden="true"></div>
+        <canvas class="wheel" id="wheelCanvas" width="600" height="600" role="button" tabindex="0" aria-label="Roleta. Pressione Enter ou Espaço para girar."></canvas>
+        <div class="wheel-center" aria-hidden="true">🎨</div>
       </div>
     </div>
-    <div class="wheel-status" id="wheelStatus">Clique na roleta para girar</div>
+    <div class="wheel-status" id="wheelStatus" aria-live="polite">Clique na roleta para girar</div>
   </section>
 
   <aside class="panel">
-    <h2>📜 Histórico <span class="badge" id="historyCount">0</span></h2>
-    <div class="history-list" id="historyList">
+    <h2>📜 Histórico <span class="badge" id="historyCount" aria-live="polite">0</span></h2>
+    <div class="history-list" id="historyList" aria-live="polite">
       <div class="history-empty">Nenhum sorteio ainda.</div>
     </div>
     <div class="btn-row" style="margin-top: 12px;">
-      <button class="btn btn-ghost" id="btnClearHistory" style="flex:1;">🗑️ Limpar histórico</button>
+      <button type="button" class="btn btn-ghost" id="btnClearHistory" style="flex:1;">🗑️ Limpar histórico</button>
     </div>
   </aside>
 </main>
 
 <div class="modal-overlay" id="modalOverlay">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal-header">
       <h3 id="modalTitle">🎉 Sorteado!</h3>
-      <button class="modal-close" id="modalClose">×</button>
+      <button type="button" class="modal-close" id="modalClose" aria-label="Fechar">×</button>
     </div>
     <div class="modal-body">
       <div class="modal-image-wrap" id="modalImageWrap">
-        <div class="loader" id="modalLoader"></div>
+        <div class="loader" id="modalLoader" role="status" aria-label="Carregando"></div>
       </div>
       <div class="modal-actions">
-        <button class="btn btn-highlight" id="btnRemove">⭐ Remover</button>
-        <button class="btn btn-secondary" id="btnContinue">▶ Continuar</button>
-        <button class="btn btn-secondary" id="btnRespin">🔄 Sortear de novo</button>
+        <button type="button" class="btn btn-highlight" id="btnRemove">⭐ Remover</button>
+        <button type="button" class="btn btn-secondary" id="btnContinue">▶ Continuar</button>
+        <button type="button" class="btn btn-secondary" id="btnRespin">🔄 Sortear de novo</button>
       </div>
     </div>
   </div>
 </div>
 
-<div class="presentation-overlay" id="presentationOverlay">
-  <button class="presentation-close" id="presentationClose">×</button>
+<div class="presentation-overlay" id="presentationOverlay" role="dialog" aria-modal="true" aria-label="Modo apresentação">
+  <button type="button" class="presentation-close" id="presentationClose" aria-label="Fechar modo apresentação">×</button>
   <img id="presentationImg" src="" alt="" />
   <div class="presentation-text" id="presentationText"></div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<div class="confetti-layer" id="confettiLayer" aria-hidden="true"></div>
 
 <footer class="app-footer">
   <p>Plataforma desenvolvida por Gabriel Alves | <a href="https://panoramaedu.onrender.com/" target="_blank" rel="noopener noreferrer">Panorama Educação</a></p>
@@ -787,6 +878,7 @@ $('btnMute').addEventListener('click', () => {
   state.muted = !state.muted;
   $('btnMute').textContent = state.muted ? '🔇' : '🔊';
   $('btnMute').classList.toggle('active', state.muted);
+  $('btnMute').setAttribute('aria-pressed', String(state.muted));
   saveState();
 });
 
@@ -806,14 +898,20 @@ $('btnPresent').addEventListener('click', () => {
     presentationOverlay.classList.add('text-mode');
   }
   
+  lastFocusedBeforeOverlay = document.activeElement;
   presentationOverlay.classList.add('active');
   state.presentationMode = true;
+  requestAnimationFrame(() => $('presentationClose').focus());
 });
 
 $('presentationClose').addEventListener('click', () => {
   presentationOverlay.classList.remove('active');
   presentationOverlay.classList.remove('text-mode');
   state.presentationMode = false;
+  if (lastFocusedBeforeOverlay && document.body.contains(lastFocusedBeforeOverlay)) {
+    lastFocusedBeforeOverlay.focus();
+  }
+  lastFocusedBeforeOverlay = null;
 });
 
 wheelCanvas.addEventListener('click', spinWheel);
@@ -855,6 +953,17 @@ if (btnOffline) {
   btnOffline.addEventListener('click', generateOfflineHTML);
 }
 
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (state.items.length && !state.spinning) {
+      state.sliceLabels = null;
+      renderWheel();
+    }
+  }, 150);
+});
+
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if (e.key === 'Escape') {
@@ -862,13 +971,25 @@ document.addEventListener('keydown', e => {
       presentationOverlay.classList.remove('active');
       presentationOverlay.classList.remove('text-mode');
       state.presentationMode = false;
+      if (lastFocusedBeforeOverlay && document.body.contains(lastFocusedBeforeOverlay)) {
+        lastFocusedBeforeOverlay.focus();
+      }
+      lastFocusedBeforeOverlay = null;
     } else if (modalOverlay.classList.contains('active')) {
       closeModal();
     }
   }
-  if (e.key === ' ' && !state.spinning && !modalOverlay.classList.contains('active')) {
+  const isSpinTrigger = e.key === ' ' || (e.key === 'Enter' && e.target === wheelCanvas);
+  if (isSpinTrigger && !state.spinning && !modalOverlay.classList.contains('active')) {
     e.preventDefault();
     spinWheel();
+  }
+});
+
+uploadArea.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    imageUpload.click();
   }
 });
 
