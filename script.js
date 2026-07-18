@@ -12,7 +12,8 @@ const state = {
   theme: 'light',
   title: 'Minha Roleta',
   presentationMode: false,
-  currentDrawn: null
+  currentDrawn: null,
+  currentDrawnIndex: null
 };
 
 /* ============ PALETA EDUCACIONAL ============ */
@@ -87,7 +88,7 @@ function getItemType(item) {
 function checkStorageQuota() {
   if (IS_OFFLINE) return true;
   try {
-    const used = JSON.stringify(state.items).length;
+    const used = JSON.stringify(state.items).length + JSON.stringify(state.history).length;
     const limit = 5 * 1024 * 1024;
     if (used > limit * 0.8) {
       storageWarning.classList.add('show');
@@ -181,12 +182,44 @@ function handleImageUpload(files) {
   const fileArray = Array.from(files);
   if (fileArray.length === 0) return;
   
+  const MAX_IMAGE_SIZE = 8 * 1024 * 1024; // 8MB por imagem
   let processed = 0;
+  let added = 0;
+  let skippedType = 0;
+  let skippedSize = 0;
   const total = fileArray.length;
+  
+  function finalize() {
+    if (processed !== total) return;
+    if (added > 0) {
+      linksInput.value = state.items.join('\n');
+      assignColors();
+      renderWheel();
+      saveState();
+      updateCounter();
+    }
+    if (added > 0 && skippedType === 0 && skippedSize === 0) {
+      showToast(`✅ ${added} imagem${added > 1 ? 'ns' : ''} adicionada${added > 1 ? 's' : ''}`);
+    } else if (added > 0) {
+      showToast(`✅ ${added} adicionada${added > 1 ? 's' : ''}, ${skippedType + skippedSize} ignorada${(skippedType + skippedSize) > 1 ? 's' : ''}`);
+    } else if (skippedSize > 0) {
+      showToast('⚠️ Imagem(ns) muito grande(s) para adicionar (máx. 8MB cada)');
+    } else {
+      showToast('⚠️ Nenhum arquivo de imagem válido selecionado');
+    }
+  }
   
   fileArray.forEach(file => {
     if (!file.type.startsWith('image/')) {
+      skippedType++;
       processed++;
+      finalize();
+      return;
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      skippedSize++;
+      processed++;
+      finalize();
       return;
     }
     
@@ -194,22 +227,14 @@ function handleImageUpload(files) {
     reader.onload = (e) => {
       const dataUrl = e.target.result;
       state.items.push(dataUrl);
+      added++;
       processed++;
-      
-      if (processed === total) {
-        linksInput.value = state.items.join('\n');
-        assignColors();
-        renderWheel();
-        saveState();
-        showToast(`✅ ${total} imagem${total > 1 ? 'ns' : ''} adicionada${total > 1 ? 's' : ''}`);
-        updateCounter();
-      }
+      finalize();
     };
     reader.onerror = () => {
+      skippedType++;
       processed++;
-      if (processed === total) {
-        showToast('⚠️ Algumas imagens não puderam ser carregadas');
-      }
+      finalize();
     };
     reader.readAsDataURL(file);
   });
@@ -406,6 +431,7 @@ function drawItem(index) {
   const item = state.items[index];
   const color = state.colors[index] || null;
   state.currentDrawn = item;
+  state.currentDrawnIndex = index;
   wheelStatus.textContent = 'Sorteado!';
   showModal(item);
   addToHistory(item, color);
@@ -451,6 +477,7 @@ function showModal(item) {
 function closeModal() {
   modalOverlay.classList.remove('active');
   state.currentDrawn = null;
+  state.currentDrawnIndex = null;
   wheelStatus.textContent = 'Clique na roleta para girar';
   if (lastFocusedBeforeOverlay && document.body.contains(lastFocusedBeforeOverlay)) {
     lastFocusedBeforeOverlay.focus();
@@ -838,21 +865,42 @@ $('btnImport').addEventListener('click', () => $('fileInput').click());
 $('fileInput').addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
+  const MAX_IMPORT_SIZE = 25 * 1024 * 1024; // 25MB
+  if (file.size > MAX_IMPORT_SIZE) {
+    showToast('⚠️ Arquivo muito grande para importar');
+    e.target.value = '';
+    return;
+  }
   const reader = new FileReader();
   reader.onload = ev => {
     try {
       const data = JSON.parse(ev.target.result);
       if (Array.isArray(data.items)) {
-        state.items = data.items;
-        linksInput.value = data.items.join('\n');
-        if (data.title) { state.title = data.title; $('titleEdit').value = data.title; }
+        const cleaned = [...new Set(
+          data.items
+            .filter(v => typeof v === 'string')
+            .map(v => v.trim())
+            .filter(v => v.length > 0)
+        )];
+        if (cleaned.length === 0) {
+          showToast('⚠️ O arquivo não contém itens válidos');
+          return;
+        }
+        state.items = cleaned;
+        linksInput.value = cleaned.join('\n');
+        if (typeof data.title === 'string' && data.title.trim()) {
+          state.title = data.title.trim().slice(0, 120);
+          $('titleEdit').value = state.title;
+          document.title = state.title + ' — RoletArtes';
+        }
         assignColors();
+        state.currentAngle = 0;
         renderWheel();
         saveState();
         updateCounter();
-        showToast('📂 JSON importado!');
+        showToast(`📂 ${cleaned.length} item${cleaned.length !== 1 ? 'ns' : ''} importado${cleaned.length !== 1 ? 's' : ''}!`);
       } else {
-        showToast('⚠️ JSON inválido');
+        showToast('⚠️ JSON inválido: esperado um campo "items" com uma lista');
       }
     } catch(err) {
       showToast('⚠️ Erro ao ler arquivo');
@@ -892,6 +940,13 @@ $('btnPresent').addEventListener('click', () => {
   presentationOverlay.classList.remove('text-mode');
   
   if (type === 'image') {
+    presentationImg.onerror = () => {
+      presentationText.textContent = '⚠️ Não foi possível carregar esta imagem.';
+      presentationOverlay.classList.add('text-mode');
+    };
+    presentationImg.onload = () => {
+      presentationOverlay.classList.remove('text-mode');
+    };
     presentationImg.src = state.currentDrawn;
   } else {
     presentationText.textContent = state.currentDrawn;
@@ -921,7 +976,14 @@ modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) clo
 
 $('btnRemove').addEventListener('click', () => {
   if (!state.currentDrawn) return;
-  state.items = state.items.filter(u => u !== state.currentDrawn);
+  let idx = state.currentDrawnIndex;
+  // Segurança: se por algum motivo o índice não corresponder mais ao item sorteado,
+  // cai para remover pela primeira ocorrência do valor (comportamento antigo).
+  if (idx == null || state.items[idx] !== state.currentDrawn) {
+    idx = state.items.indexOf(state.currentDrawn);
+  }
+  if (idx === -1 || idx == null) { closeModal(); return; }
+  state.items.splice(idx, 1);
   linksInput.value = state.items.join('\n');
   assignColors();
   renderWheel();
