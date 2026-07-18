@@ -51,6 +51,12 @@ const btnOffline = $('btnOffline');
 const confettiLayer = $('confettiLayer');
 const wheelsModalOverlay = $('wheelsModalOverlay');
 const wheelsList = $('wheelsList');
+const dialogModalOverlay = $('dialogModalOverlay');
+const dialogModalTitle = $('dialogModalTitle');
+const dialogModalMessage = $('dialogModalMessage');
+const dialogModalInput = $('dialogModalInput');
+const dialogModalConfirm = $('dialogModalConfirm');
+const dialogModalCancel = $('dialogModalCancel');
 
 /* ============ ACESSIBILIDADE / PERFORMANCE ============ */
 const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -294,26 +300,33 @@ function duplicateWheel(id) {
 
 function renameWheel(id) {
   const currentName = id === state.activeWheelId ? state.title : ((loadWheelData(id) || {}).name);
-  const newName = prompt('Novo nome da roleta:', currentName || 'Minha Roleta');
-  if (newName === null) return;
-  const trimmed = newName.trim().slice(0, 80) || 'Minha Roleta';
 
-  if (id === state.activeWheelId) {
-    state.title = trimmed;
-    $('titleEdit').value = trimmed;
-    document.title = trimmed + ' — RoletArtes';
-    persistActiveWheel();
-  } else {
-    const wheel = loadWheelData(id);
-    if (!wheel) return;
-    wheel.name = trimmed;
-    wheel.updatedAt = Date.now();
-    saveWheelData(wheel);
-    const entry = state.wheelsIndex.find(w => w.id === id);
-    if (entry) { entry.name = trimmed; entry.updatedAt = wheel.updatedAt; }
-    saveWheelsIndex();
-  }
-  renderWheelsList();
+  openDialog({
+    title: '✏️ Renomear roleta',
+    message: 'Novo nome para essa roleta:',
+    inputValue: currentName || 'Minha Roleta',
+    confirmLabel: 'Salvar',
+    onConfirm: (value) => {
+      const trimmed = (value || '').trim().slice(0, 80) || 'Minha Roleta';
+
+      if (id === state.activeWheelId) {
+        state.title = trimmed;
+        $('titleEdit').value = trimmed;
+        document.title = trimmed + ' — RoletArtes';
+        persistActiveWheel();
+      } else {
+        const wheel = loadWheelData(id);
+        if (!wheel) return;
+        wheel.name = trimmed;
+        wheel.updatedAt = Date.now();
+        saveWheelData(wheel);
+        const entry = state.wheelsIndex.find(w => w.id === id);
+        if (entry) { entry.name = trimmed; entry.updatedAt = wheel.updatedAt; }
+        saveWheelsIndex();
+      }
+      renderWheelsList();
+    }
+  });
 }
 
 function deleteWheel(id) {
@@ -323,20 +336,27 @@ function deleteWheel(id) {
   }
   const entry = state.wheelsIndex.find(w => w.id === id);
   const name = entry ? entry.name : 'esta roleta';
-  if (!confirm(`Excluir "${name}"? Isso apaga os itens e o histórico dela permanentemente.`)) return;
 
-  localStorage.removeItem(wheelStorageKey(id));
-  state.wheelsIndex = state.wheelsIndex.filter(w => w.id !== id);
-  saveWheelsIndex();
+  openDialog({
+    title: '🗑️ Excluir roleta',
+    message: `Excluir "${name}"? Isso apaga os itens e o histórico dela permanentemente. Essa ação não pode ser desfeita.`,
+    confirmLabel: 'Excluir',
+    danger: true,
+    onConfirm: () => {
+      localStorage.removeItem(wheelStorageKey(id));
+      state.wheelsIndex = state.wheelsIndex.filter(w => w.id !== id);
+      saveWheelsIndex();
 
-  if (id === state.activeWheelId) {
-    const next = state.wheelsIndex[0];
-    const nextWheel = loadWheelData(next.id) || { id: next.id, name: next.name, items: [], history: [] };
-    applyWheelDataToState(nextWheel);
-    localStorage.setItem(ACTIVE_WHEEL_KEY, next.id);
-  }
-  renderWheelsList();
-  showToast('🗑️ Roleta excluída');
+      if (id === state.activeWheelId) {
+        const next = state.wheelsIndex[0];
+        const nextWheel = loadWheelData(next.id) || { id: next.id, name: next.name, items: [], history: [] };
+        applyWheelDataToState(nextWheel);
+        localStorage.setItem(ACTIVE_WHEEL_KEY, next.id);
+      }
+      renderWheelsList();
+      showToast('🗑️ Roleta excluída');
+    }
+  });
 }
 
 function renderWheelsList() {
@@ -391,6 +411,57 @@ function closeWheelsModal() {
     lastFocusedBeforeOverlay.focus();
   }
   lastFocusedBeforeOverlay = null;
+}
+
+/* ============ DIÁLOGO GENÉRICO ============
+   Substitui window.prompt()/window.confirm() por um modal do próprio site,
+   consistente visualmente e acessível (foco preso, Esc fecha, etc).
+   Uso:
+     openDialog({ title, message, confirmLabel, danger, onConfirm })                    // tipo "confirm"
+     openDialog({ title, message, inputValue, confirmLabel, onConfirm(value) })          // tipo "prompt"
+   onConfirm só é chamado se a pessoa confirmar; cancelar/fechar não faz nada
+   (igual ao comportamento de prompt() retornando null / confirm() retornando false). */
+let lastFocusedBeforeDialog = null;
+let dialogOnConfirm = null;
+
+function openDialog({ title, message, inputValue, confirmLabel = 'Confirmar', danger = false, onConfirm }) {
+  dialogModalTitle.textContent = title;
+  dialogModalMessage.textContent = message || '';
+  dialogModalConfirm.textContent = confirmLabel;
+  dialogModalConfirm.classList.toggle('btn-danger-confirm', !!danger);
+
+  const hasInput = inputValue !== undefined && inputValue !== null;
+  dialogModalInput.style.display = hasInput ? 'block' : 'none';
+  dialogModalInput.value = hasInput ? inputValue : '';
+
+  dialogOnConfirm = () => {
+    if (onConfirm) onConfirm(hasInput ? dialogModalInput.value : undefined);
+  };
+
+  lastFocusedBeforeDialog = document.activeElement;
+  dialogModalOverlay.classList.add('active');
+  requestAnimationFrame(() => {
+    if (hasInput) {
+      dialogModalInput.focus();
+      dialogModalInput.select();
+    } else {
+      dialogModalConfirm.focus();
+    }
+  });
+}
+
+function closeDialog(confirmed) {
+  dialogModalOverlay.classList.remove('active');
+  if (confirmed && dialogOnConfirm) dialogOnConfirm();
+  dialogOnConfirm = null;
+  if (lastFocusedBeforeDialog && document.body.contains(lastFocusedBeforeDialog)) {
+    lastFocusedBeforeDialog.focus();
+  } else if (wheelsModalOverlay.classList.contains('active')) {
+    // O elemento original (ex.: botão de uma roleta na lista) pode ter sido
+    // recriado ao re-renderizar a lista — cai para um alvo estável no modal.
+    ($('btnNewWheel') || wheelsModalOverlay).focus();
+  }
+  lastFocusedBeforeDialog = null;
 }
 
 function loadState() {
@@ -1039,6 +1110,24 @@ ${cssText}
   </div>
 </div>
 
+<div class="modal-overlay" id="dialogModalOverlay">
+  <div class="modal dialog-modal" role="dialog" aria-modal="true" aria-labelledby="dialogModalTitle">
+    <div class="modal-header">
+      <h3 id="dialogModalTitle">Título</h3>
+      <button type="button" class="modal-close" id="dialogModalClose" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body dialog-modal-body">
+      <p id="dialogModalMessage"></p>
+      <label for="dialogModalInput" class="sr-only">Valor</label>
+      <input type="text" id="dialogModalInput" class="dialog-input" style="display:none;" />
+      <div class="modal-actions dialog-modal-actions">
+        <button type="button" class="btn btn-secondary" id="dialogModalCancel">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="dialogModalConfirm">Confirmar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="wheelsModalOverlay">
   <div class="modal wheels-modal" role="dialog" aria-modal="true" aria-labelledby="wheelsModalTitle">
     <div class="modal-header">
@@ -1282,9 +1371,27 @@ wheelsModalOverlay.addEventListener('keydown', e => {
   if (e.key === 'Tab') trapFocus(wheelsModalOverlay.querySelector('.modal'), e);
 });
 $('btnNewWheel').addEventListener('click', () => {
-  const name = prompt('Nome da nova roleta:', 'Nova roleta');
-  if (name === null) return;
-  createNewWheel(name.trim().slice(0, 80) || 'Nova roleta');
+  openDialog({
+    title: '➕ Nova roleta',
+    message: 'Como você quer chamar essa roleta?',
+    inputValue: 'Nova roleta',
+    confirmLabel: 'Criar',
+    onConfirm: (value) => {
+      createNewWheel((value || '').trim().slice(0, 80) || 'Nova roleta');
+    }
+  });
+});
+
+dialogModalConfirm.addEventListener('click', () => closeDialog(true));
+dialogModalCancel.addEventListener('click', () => closeDialog(false));
+$('dialogModalClose').addEventListener('click', () => closeDialog(false));
+dialogModalOverlay.addEventListener('click', e => { if (e.target === dialogModalOverlay) closeDialog(false); });
+dialogModalOverlay.addEventListener('keydown', e => {
+  if (e.key === 'Tab') trapFocus(dialogModalOverlay.querySelector('.modal'), e);
+  if (e.key === 'Escape') { e.stopPropagation(); closeDialog(false); }
+});
+dialogModalInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); closeDialog(true); }
 });
 
 $('btnRemove').addEventListener('click', () => {
@@ -1315,12 +1422,18 @@ $('btnRespin').addEventListener('click', () => {
 
 $('btnClearHistory').addEventListener('click', () => {
   if (state.history.length === 0) return;
-  if (confirm('Limpar todo o histórico?')) {
-    state.history = [];
-    renderHistory();
-    saveState();
-    showToast('🗑️ Histórico limpo');
-  }
+  openDialog({
+    title: '🗑️ Limpar histórico',
+    message: 'Tem certeza que deseja limpar todo o histórico de sorteios desta roleta?',
+    confirmLabel: 'Limpar',
+    danger: true,
+    onConfirm: () => {
+      state.history = [];
+      renderHistory();
+      saveState();
+      showToast('🗑️ Histórico limpo');
+    }
+  });
 });
 
 // Handler do botão offline

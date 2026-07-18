@@ -113,6 +113,25 @@
   </div>
 </div>
 
+<!-- DIÁLOGO GENÉRICO (substitui prompt()/confirm() do navegador) -->
+<div class="modal-overlay" id="dialogModalOverlay">
+  <div class="modal dialog-modal" role="dialog" aria-modal="true" aria-labelledby="dialogModalTitle">
+    <div class="modal-header">
+      <h3 id="dialogModalTitle">Título</h3>
+      <button type="button" class="modal-close" id="dialogModalClose" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body dialog-modal-body">
+      <p id="dialogModalMessage"></p>
+      <label for="dialogModalInput" class="sr-only" id="dialogModalInputLabel">Valor</label>
+      <input type="text" id="dialogModalInput" class="dialog-input" style="display:none;" />
+      <div class="modal-actions dialog-modal-actions">
+        <button type="button" class="btn btn-secondary" id="dialogModalCancel">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="dialogModalConfirm">Confirmar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL DE GERENCIAMENTO DE ROLETAS -->
 <div class="modal-overlay" id="wheelsModalOverlay">
   <div class="modal wheels-modal" role="dialog" aria-modal="true" aria-labelledby="wheelsModalTitle">
