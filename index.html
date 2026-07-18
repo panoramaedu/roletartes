@@ -24,6 +24,7 @@
   <label for="titleEdit" class="sr-only">Título da roleta</label>
   <input type="text" class="title-edit" id="titleEdit" placeholder="Digite o título da roleta..." value="Minha Roleta" />
   <div class="header-actions">
+    <button type="button" class="icon-btn" id="btnWheels" title="Minhas roletas" aria-label="Abrir gerenciador de roletas salvas">🗂️</button>
     <button type="button" class="icon-btn" id="btnMute" title="Ativar/desativar som" aria-label="Ativar ou desativar som" aria-pressed="false">🔊</button>
     <button type="button" class="icon-btn" id="btnTheme" title="Alternar tema" aria-label="Alternar entre tema claro e escuro">🌙</button>
     <button type="button" class="icon-btn" id="btnPresent" title="Modo apresentação" aria-label="Abrir modo apresentação">⛶</button>
@@ -108,6 +109,20 @@
         <button type="button" class="btn btn-secondary" id="btnContinue">▶ Continuar</button>
         <button type="button" class="btn btn-secondary" id="btnRespin">🔄 Sortear de novo</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DE GERENCIAMENTO DE ROLETAS -->
+<div class="modal-overlay" id="wheelsModalOverlay">
+  <div class="modal wheels-modal" role="dialog" aria-modal="true" aria-labelledby="wheelsModalTitle">
+    <div class="modal-header">
+      <h3 id="wheelsModalTitle">🗂️ Minhas roletas</h3>
+      <button type="button" class="modal-close" id="wheelsModalClose" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body wheels-modal-body">
+      <button type="button" class="btn btn-primary" id="btnNewWheel" style="width:100%; justify-content:center;">➕ Nova roleta</button>
+      <div class="wheels-list" id="wheelsList" aria-live="polite"></div>
     </div>
   </div>
 </div>

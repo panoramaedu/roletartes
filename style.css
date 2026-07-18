@@ -648,6 +648,56 @@ canvas.wheel.spinning {
   gap: 16px;
 }
 
+/* ============ GERENCIADOR DE ROLETAS ============ */
+.wheels-modal-body { align-items: stretch; }
+.wheels-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.wheel-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  transition: border-color var(--transition);
+}
+.wheel-card.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+.wheel-card-info { flex: 1; min-width: 0; }
+.wheel-card-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.wheel-card-meta { font-size: 0.8rem; color: var(--text-soft); margin-top: 2px; }
+.wheel-card-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.wheel-card-actions .icon-btn { width: 36px; height: 36px; font-size: 0.95rem; }
+.wheel-active-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--primary);
+  background: var(--bg-alt);
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--primary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 .modal-image-wrap {
   width: 100%;
   max-height: 60vh;

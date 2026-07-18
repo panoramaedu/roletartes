@@ -13,7 +13,9 @@ const state = {
   title: 'Minha Roleta',
   presentationMode: false,
   currentDrawn: null,
-  currentDrawnIndex: null
+  currentDrawnIndex: null,
+  activeWheelId: null,
+  wheelsIndex: []
 };
 
 /* ============ PALETA EDUCACIONAL ============ */
@@ -47,6 +49,8 @@ const offlineSection = $('offlineSection');
 const offlineHint = $('offlineHint');
 const btnOffline = $('btnOffline');
 const confettiLayer = $('confettiLayer');
+const wheelsModalOverlay = $('wheelsModalOverlay');
+const wheelsList = $('wheelsList');
 
 /* ============ ACESSIBILIDADE / PERFORMANCE ============ */
 const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -102,14 +106,53 @@ function checkStorageQuota() {
   }
 }
 
+/* ============ MÚLTIPLAS ROLETAS (armazenamento) ============
+   Cada roleta vive em sua própria chave 'roletartes_wheel_<id>', com um
+   índice leve em 'roletartes_wheels_index' pra listar sem carregar tudo.
+   Tema e som mudo continuam globais (não fazem sentido por roleta). */
+const WHEELS_INDEX_KEY = 'roletartes_wheels_index';
+const ACTIVE_WHEEL_KEY = 'roletartes_active_wheel_id';
+function wheelStorageKey(id) { return 'roletartes_wheel_' + id; }
+
+function generateWheelId() {
+  return 'w_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+}
+
+function loadWheelsIndex() {
+  try {
+    const raw = localStorage.getItem(WHEELS_INDEX_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) { return []; }
+}
+
+function saveWheelsIndex() {
+  try { localStorage.setItem(WHEELS_INDEX_KEY, JSON.stringify(state.wheelsIndex)); } catch(e) {}
+}
+
+function loadWheelData(id) {
+  try {
+    const raw = localStorage.getItem(wheelStorageKey(id));
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
+function saveWheelData(wheel) {
+  try {
+    localStorage.setItem(wheelStorageKey(wheel.id), JSON.stringify(wheel));
+  } catch(e) {
+    if (e.name === 'QuotaExceededError') {
+      showToast('⚠️ localStorage cheio! Remova alguns itens ou roletas.');
+      storageWarning.classList.add('show');
+    }
+  }
+}
+
 function saveState() {
   if (IS_OFFLINE) return; // Não salvar no modo offline
   try {
-    localStorage.setItem('roletartes_links', JSON.stringify(state.items));
-    localStorage.setItem('roletartes_title', state.title);
     localStorage.setItem('roletartes_theme', state.theme);
     localStorage.setItem('roletartes_muted', state.muted);
-    localStorage.setItem('roletartes_history', JSON.stringify(state.history));
+    persistActiveWheel();
     checkStorageQuota();
   } catch(e) {
     if (e.name === 'QuotaExceededError') {
@@ -117,6 +160,237 @@ function saveState() {
       storageWarning.classList.add('show');
     }
   }
+}
+
+/* Migra o formato antigo (roleta única) para o novo formato de múltiplas
+   roletas. Roda uma única vez, na primeira carga após a atualização. */
+function migrateLegacyDataIfNeeded() {
+  if (localStorage.getItem(WHEELS_INDEX_KEY)) return; // já migrado
+
+  const legacyLinks = localStorage.getItem('roletartes_links');
+  const legacyTitle = localStorage.getItem('roletartes_title');
+  const legacyHistory = localStorage.getItem('roletartes_history');
+
+  const id = generateWheelId();
+  let items = [], history = [];
+  try { if (legacyLinks) items = JSON.parse(legacyLinks) || []; } catch(e) {}
+  try { if (legacyHistory) history = JSON.parse(legacyHistory) || []; } catch(e) {}
+
+  const wheel = {
+    id,
+    name: legacyTitle || 'Minha Roleta',
+    items, history,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+  saveWheelData(wheel);
+  state.wheelsIndex = [{ id, name: wheel.name, updatedAt: wheel.updatedAt }];
+  saveWheelsIndex();
+  localStorage.setItem(ACTIVE_WHEEL_KEY, id);
+
+  localStorage.removeItem('roletartes_links');
+  localStorage.removeItem('roletartes_title');
+  localStorage.removeItem('roletartes_history');
+}
+
+function persistActiveWheel() {
+  if (IS_OFFLINE || !state.activeWheelId) return;
+  const previous = loadWheelData(state.activeWheelId);
+  const wheel = {
+    id: state.activeWheelId,
+    name: state.title || 'Minha Roleta',
+    items: state.items,
+    history: state.history,
+    createdAt: (previous && previous.createdAt) || Date.now(),
+    updatedAt: Date.now()
+  };
+  saveWheelData(wheel);
+
+  const entry = state.wheelsIndex.find(w => w.id === wheel.id);
+  if (entry) {
+    entry.name = wheel.name;
+    entry.updatedAt = wheel.updatedAt;
+  } else {
+    state.wheelsIndex.push({ id: wheel.id, name: wheel.name, updatedAt: wheel.updatedAt });
+  }
+  saveWheelsIndex();
+}
+
+function applyWheelDataToState(wheel) {
+  state.items = Array.isArray(wheel.items) ? wheel.items : [];
+  state.history = Array.isArray(wheel.history) ? wheel.history : [];
+  state.title = wheel.name || 'Minha Roleta';
+  state.activeWheelId = wheel.id;
+  state.currentAngle = 0;
+  state.currentDrawn = null;
+  state.currentDrawnIndex = null;
+
+  $('titleEdit').value = state.title;
+  document.title = state.title + ' — RoletArtes';
+  linksInput.value = state.items.join('\n');
+
+  if (state.items.length) {
+    assignColors();
+  } else {
+    state.colors = [];
+    state.sliceLabels = null;
+  }
+  renderWheel();
+  renderHistory();
+  updateCounter();
+  checkStorageQuota();
+}
+
+function switchActiveWheel(id) {
+  if (id === state.activeWheelId) { closeWheelsModal(); return; }
+  const wheel = loadWheelData(id);
+  if (!wheel) { showToast('⚠️ Não foi possível abrir essa roleta'); return; }
+  persistActiveWheel(); // salva a roleta que está saindo antes de trocar
+  applyWheelDataToState(wheel);
+  localStorage.setItem(ACTIVE_WHEEL_KEY, id);
+  closeWheelsModal();
+  showToast(`🗂️ "${state.title}" aberta`);
+}
+
+function createNewWheel(name) {
+  const id = generateWheelId();
+  const wheel = {
+    id,
+    name: name || 'Nova roleta',
+    items: [],
+    history: [],
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+  persistActiveWheel();
+  saveWheelData(wheel);
+  state.wheelsIndex.push({ id, name: wheel.name, updatedAt: wheel.updatedAt });
+  saveWheelsIndex();
+  applyWheelDataToState(wheel);
+  localStorage.setItem(ACTIVE_WHEEL_KEY, id);
+  renderWheelsList();
+  showToast(`✅ Roleta "${wheel.name}" criada`);
+}
+
+function duplicateWheel(id) {
+  if (id === state.activeWheelId) persistActiveWheel();
+  const source = loadWheelData(id);
+  if (!source) return;
+  const newId = generateWheelId();
+  const wheel = {
+    id: newId,
+    name: (source.name || 'Roleta') + ' (cópia)',
+    items: [...(source.items || [])],
+    history: [...(source.history || [])],
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+  saveWheelData(wheel);
+  state.wheelsIndex.push({ id: newId, name: wheel.name, updatedAt: wheel.updatedAt });
+  saveWheelsIndex();
+  renderWheelsList();
+  showToast(`📄 Roleta duplicada como "${wheel.name}"`);
+}
+
+function renameWheel(id) {
+  const currentName = id === state.activeWheelId ? state.title : ((loadWheelData(id) || {}).name);
+  const newName = prompt('Novo nome da roleta:', currentName || 'Minha Roleta');
+  if (newName === null) return;
+  const trimmed = newName.trim().slice(0, 80) || 'Minha Roleta';
+
+  if (id === state.activeWheelId) {
+    state.title = trimmed;
+    $('titleEdit').value = trimmed;
+    document.title = trimmed + ' — RoletArtes';
+    persistActiveWheel();
+  } else {
+    const wheel = loadWheelData(id);
+    if (!wheel) return;
+    wheel.name = trimmed;
+    wheel.updatedAt = Date.now();
+    saveWheelData(wheel);
+    const entry = state.wheelsIndex.find(w => w.id === id);
+    if (entry) { entry.name = trimmed; entry.updatedAt = wheel.updatedAt; }
+    saveWheelsIndex();
+  }
+  renderWheelsList();
+}
+
+function deleteWheel(id) {
+  if (state.wheelsIndex.length <= 1) {
+    showToast('⚠️ Você precisa manter ao menos uma roleta');
+    return;
+  }
+  const entry = state.wheelsIndex.find(w => w.id === id);
+  const name = entry ? entry.name : 'esta roleta';
+  if (!confirm(`Excluir "${name}"? Isso apaga os itens e o histórico dela permanentemente.`)) return;
+
+  localStorage.removeItem(wheelStorageKey(id));
+  state.wheelsIndex = state.wheelsIndex.filter(w => w.id !== id);
+  saveWheelsIndex();
+
+  if (id === state.activeWheelId) {
+    const next = state.wheelsIndex[0];
+    const nextWheel = loadWheelData(next.id) || { id: next.id, name: next.name, items: [], history: [] };
+    applyWheelDataToState(nextWheel);
+    localStorage.setItem(ACTIVE_WHEEL_KEY, next.id);
+  }
+  renderWheelsList();
+  showToast('🗑️ Roleta excluída');
+}
+
+function renderWheelsList() {
+  if (!wheelsList) return;
+  if (state.wheelsIndex.length === 0) {
+    wheelsList.innerHTML = '<p class="history-empty">Nenhuma roleta salva.</p>';
+    return;
+  }
+  const sorted = [...state.wheelsIndex].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  wheelsList.innerHTML = '';
+  sorted.forEach(w => {
+    const isActive = w.id === state.activeWheelId;
+    const itemCount = isActive ? state.items.length : ((loadWheelData(w.id) || {}).items || []).length;
+    const div = document.createElement('div');
+    div.className = 'wheel-card' + (isActive ? ' active' : '');
+    div.innerHTML = `
+      <div class="wheel-card-info">
+        <div class="wheel-card-name">${escapeHtml(w.name)} ${isActive ? '<span class="wheel-active-badge">Ativa</span>' : ''}</div>
+        <div class="wheel-card-meta">${itemCount} item${itemCount !== 1 ? 'ns' : ''}</div>
+      </div>
+      <div class="wheel-card-actions">
+        ${!isActive ? `<button type="button" class="icon-btn" data-action="open" title="Abrir esta roleta" aria-label="Abrir ${escapeHtml(w.name)}">📂</button>` : ''}
+        <button type="button" class="icon-btn" data-action="rename" title="Renomear" aria-label="Renomear ${escapeHtml(w.name)}">✏️</button>
+        <button type="button" class="icon-btn" data-action="duplicate" title="Duplicar" aria-label="Duplicar ${escapeHtml(w.name)}">📄</button>
+        <button type="button" class="icon-btn" data-action="delete" title="Excluir" aria-label="Excluir ${escapeHtml(w.name)}">🗑️</button>
+      </div>
+    `;
+    div.querySelectorAll('[data-action]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const action = btn.getAttribute('data-action');
+        if (action === 'open') switchActiveWheel(w.id);
+        else if (action === 'rename') renameWheel(w.id);
+        else if (action === 'duplicate') duplicateWheel(w.id);
+        else if (action === 'delete') deleteWheel(w.id);
+      });
+    });
+    wheelsList.appendChild(div);
+  });
+}
+
+function openWheelsModal() {
+  if (IS_OFFLINE) { showToast('⚠️ Indisponível no modo offline'); return; }
+  lastFocusedBeforeOverlay = document.activeElement;
+  renderWheelsList();
+  wheelsModalOverlay.classList.add('active');
+  requestAnimationFrame(() => $('btnNewWheel').focus());
+}
+
+function closeWheelsModal() {
+  wheelsModalOverlay.classList.remove('active');
+  if (lastFocusedBeforeOverlay && document.body.contains(lastFocusedBeforeOverlay)) {
+    lastFocusedBeforeOverlay.focus();
+  }
+  lastFocusedBeforeOverlay = null;
 }
 
 function loadState() {
@@ -145,30 +419,43 @@ function loadState() {
     // Ajustar UI para modo offline
     if (offlineSection) offlineSection.style.display = 'none';
     if (offlineHint) offlineHint.style.display = 'block';
+    if ($('btnWheels')) $('btnWheels').style.display = 'none';
     
     updateCounter();
     return;
   }
   
-  // MODO ONLINE: comportamento normal
+  // MODO ONLINE: múltiplas roletas
   try {
-    const links = localStorage.getItem('roletartes_links');
-    const title = localStorage.getItem('roletartes_title');
+    migrateLegacyDataIfNeeded();
+    state.wheelsIndex = loadWheelsIndex();
+    
     const theme = localStorage.getItem('roletartes_theme');
     const muted = localStorage.getItem('roletartes_muted');
-    const history = localStorage.getItem('roletartes_history');
-    if (links) state.items = JSON.parse(links);
-    if (title) { state.title = title; $('titleEdit').value = title; }
     if (theme) { state.theme = theme; applyTheme(); }
     if (muted === 'true') { state.muted = true; $('btnMute').textContent = '🔇'; $('btnMute').setAttribute('aria-pressed', 'true'); }
-    if (history) state.history = JSON.parse(history);
-    if (state.items.length) {
-      linksInput.value = state.items.join('\n');
-      assignColors();
-      renderWheel();
+    
+    let activeId = localStorage.getItem(ACTIVE_WHEEL_KEY);
+    let wheel = activeId ? loadWheelData(activeId) : null;
+    
+    // Sem roleta ativa válida (primeiro acesso, dados corrompidos, etc.): usa a
+    // primeira do índice, ou cria uma nova roleta vazia se não existir nenhuma.
+    if (!wheel) {
+      if (state.wheelsIndex.length) {
+        wheel = loadWheelData(state.wheelsIndex[0].id);
+        activeId = state.wheelsIndex[0].id;
+      }
+      if (!wheel) {
+        activeId = generateWheelId();
+        wheel = { id: activeId, name: 'Minha Roleta', items: [], history: [], createdAt: Date.now(), updatedAt: Date.now() };
+        saveWheelData(wheel);
+        state.wheelsIndex = [{ id: activeId, name: wheel.name, updatedAt: wheel.updatedAt }];
+        saveWheelsIndex();
+      }
+      localStorage.setItem(ACTIVE_WHEEL_KEY, activeId);
     }
-    renderHistory();
-    checkStorageQuota();
+    
+    applyWheelDataToState(wheel);
   } catch(e) {}
 }
 
@@ -671,6 +958,7 @@ ${cssText}
   <label for="titleEdit" class="sr-only">Título da roleta</label>
   <input type="text" class="title-edit" id="titleEdit" placeholder="Digite o título da roleta..." value="${escapeHtml(state.title)}" />
   <div class="header-actions">
+    <button type="button" class="icon-btn" id="btnWheels" title="Minhas roletas" aria-label="Abrir gerenciador de roletas salvas" style="display:none;">🗂️</button>
     <button type="button" class="icon-btn" id="btnMute" title="Ativar/desativar som" aria-label="Ativar ou desativar som" aria-pressed="${state.muted}">${state.muted ? '🔇' : '🔊'}</button>
     <button type="button" class="icon-btn" id="btnTheme" title="Alternar tema" aria-label="Alternar entre tema claro e escuro">${state.theme === 'dark' ? '☀️' : '🌙'}</button>
     <button type="button" class="icon-btn" id="btnPresent" title="Modo apresentação" aria-label="Abrir modo apresentação">⛶</button>
@@ -747,6 +1035,19 @@ ${cssText}
         <button type="button" class="btn btn-secondary" id="btnContinue">▶ Continuar</button>
         <button type="button" class="btn btn-secondary" id="btnRespin">🔄 Sortear de novo</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="wheelsModalOverlay">
+  <div class="modal wheels-modal" role="dialog" aria-modal="true" aria-labelledby="wheelsModalTitle">
+    <div class="modal-header">
+      <h3 id="wheelsModalTitle">🗂️ Minhas roletas</h3>
+      <button type="button" class="modal-close" id="wheelsModalClose" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body wheels-modal-body">
+      <button type="button" class="btn btn-primary" id="btnNewWheel" style="width:100%; justify-content:center;">➕ Nova roleta</button>
+      <div class="wheels-list" id="wheelsList" aria-live="polite"></div>
     </div>
   </div>
 </div>
@@ -974,6 +1275,18 @@ wheelCanvas.addEventListener('click', spinWheel);
 $('modalClose').addEventListener('click', closeModal);
 modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) closeModal(); });
 
+$('btnWheels').addEventListener('click', openWheelsModal);
+$('wheelsModalClose').addEventListener('click', closeWheelsModal);
+wheelsModalOverlay.addEventListener('click', e => { if (e.target === wheelsModalOverlay) closeWheelsModal(); });
+wheelsModalOverlay.addEventListener('keydown', e => {
+  if (e.key === 'Tab') trapFocus(wheelsModalOverlay.querySelector('.modal'), e);
+});
+$('btnNewWheel').addEventListener('click', () => {
+  const name = prompt('Nome da nova roleta:', 'Nova roleta');
+  if (name === null) return;
+  createNewWheel(name.trim().slice(0, 80) || 'Nova roleta');
+});
+
 $('btnRemove').addEventListener('click', () => {
   if (!state.currentDrawn) return;
   let idx = state.currentDrawnIndex;
@@ -1039,10 +1352,12 @@ document.addEventListener('keydown', e => {
       lastFocusedBeforeOverlay = null;
     } else if (modalOverlay.classList.contains('active')) {
       closeModal();
+    } else if (wheelsModalOverlay.classList.contains('active')) {
+      closeWheelsModal();
     }
   }
   const isSpinTrigger = e.key === ' ' || (e.key === 'Enter' && e.target === wheelCanvas);
-  if (isSpinTrigger && !state.spinning && !modalOverlay.classList.contains('active')) {
+  if (isSpinTrigger && !state.spinning && !modalOverlay.classList.contains('active') && !wheelsModalOverlay.classList.contains('active')) {
     e.preventDefault();
     spinWheel();
   }
