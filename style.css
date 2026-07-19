@@ -553,6 +553,48 @@ canvas.wheel.spinning {
   color: var(--text-soft);
   font-weight: 600;
 }
+
+/* ============ LISTA DE VENCEDORES (sorteio múltiplo) ============ */
+.modal-image-wrap.winners-mode {
+  width: 100%;
+  padding: 8px;
+  align-items: stretch;
+}
+.winners-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.winner-row {
+  --item-accent: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--item-accent);
+  animation: popIn 0.3s ease;
+}
+.winner-row img { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+.winner-row-text {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.winner-row-num {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--item-accent);
+  min-width: 28px;
+}
 .history-item-url {
   font-family: var(--font-mono);
   font-size: 0.7rem;
@@ -649,6 +691,106 @@ canvas.wheel.spinning {
 }
 
 /* ============ GERENCIADOR DE ROLETAS ============ */
+/* ============ MECÂNICAS DE SORTEIO (configurações) ============ */
+.setting-row {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+.setting-row + .setting-row { margin-top: 10px; }
+.switch-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+}
+.switch-text { display: flex; flex-direction: column; gap: 2px; }
+.switch-text strong { font-family: var(--font-display); font-size: 0.95rem; }
+.switch-text small { color: var(--text-soft); font-size: 0.8rem; line-height: 1.4; }
+
+.switch { position: relative; display: inline-block; width: 44px; height: 26px; flex-shrink: 0; }
+.switch input {
+  position: absolute; inset: 0;
+  opacity: 0; margin: 0; cursor: pointer;
+  width: 100%; height: 100%;
+}
+.switch-track {
+  position: absolute; inset: 0;
+  background: var(--border);
+  border-radius: 999px;
+  transition: background var(--transition);
+  pointer-events: none;
+}
+.switch-track::before {
+  content: '';
+  position: absolute;
+  width: 20px; height: 20px;
+  left: 3px; top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform var(--transition);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.switch input:checked + .switch-track { background: var(--primary); }
+.switch input:checked + .switch-track::before { transform: translateX(18px); }
+.switch input:focus-visible + .switch-track { box-shadow: var(--focus-ring); }
+
+.setting-sub {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.setting-sub label { font-size: 0.85rem; color: var(--text-soft); font-weight: 600; }
+.setting-number-input {
+  width: 90px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+}
+.setting-number-input:focus { outline: none; border-color: var(--primary); box-shadow: var(--focus-ring); }
+
+.weights-empty-hint { font-size: 0.82rem; color: var(--text-soft); }
+.weights-list { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; }
+.weight-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-alt);
+  font-size: 0.85rem;
+}
+.weight-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.weight-stepper { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.weight-stepper button {
+  width: 24px; height: 24px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.weight-stepper button:hover { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
+.weight-value { min-width: 20px; text-align: center; font-weight: 700; color: var(--primary); }
+
+/* ============ RESULTADO DE GRUPOS ============ */
+.groups-result { display: flex; flex-direction: column; gap: 12px; max-height: 50vh; overflow-y: auto; }
+.group-card { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; background: var(--bg); }
+.group-card-title { font-family: var(--font-display); font-weight: 700; color: var(--primary); margin-bottom: 6px; font-size: 0.9rem; }
+.group-card-items { font-size: 0.88rem; color: var(--text); line-height: 1.6; }
+
 /* ============ MODELOS PRONTOS ============ */
 .templates-hint { font-size: 0.88rem; color: var(--text-soft); margin-bottom: 4px; }
 .templates-list {

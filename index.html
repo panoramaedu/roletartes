@@ -25,6 +25,7 @@
   <input type="text" class="title-edit" id="titleEdit" placeholder="Digite o título da roleta..." value="Minha Roleta" />
   <div class="header-actions">
     <button type="button" class="icon-btn" id="btnWheels" title="Minhas roletas" aria-label="Abrir gerenciador de roletas salvas">🗂️</button>
+    <button type="button" class="icon-btn" id="btnSpinSettings" title="Mecânicas de sorteio" aria-label="Abrir configurações de mecânicas de sorteio">⚙️</button>
     <button type="button" class="icon-btn" id="btnMute" title="Ativar/desativar som" aria-label="Ativar ou desativar som" aria-pressed="false">🔊</button>
     <button type="button" class="icon-btn" id="btnTheme" title="Alternar tema" aria-label="Alternar entre tema claro e escuro">🌙</button>
     <button type="button" class="icon-btn" id="btnPresent" title="Modo apresentação" aria-label="Abrir modo apresentação">⛶</button>
@@ -128,6 +129,89 @@
       <div class="modal-actions dialog-modal-actions">
         <button type="button" class="btn btn-secondary" id="dialogModalCancel">Cancelar</button>
         <button type="button" class="btn btn-primary" id="dialogModalConfirm">Confirmar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DE MECÂNICAS DE SORTEIO -->
+<div class="modal-overlay" id="settingsModalOverlay">
+  <div class="modal wheels-modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+    <div class="modal-header">
+      <h3 id="settingsModalTitle">⚙️ Mecânicas de sorteio</h3>
+      <button type="button" class="modal-close" id="settingsModalClose" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body wheels-modal-body">
+      <p class="templates-hint">Tudo aqui é opcional e fica desligado por padrão. As opções valem só para esta roleta.</p>
+
+      <div class="setting-row">
+        <label class="switch-label" for="settingAutoRemove">
+          <span class="switch-text">
+            <strong>Eliminar automaticamente</strong>
+            <small>Remove o item sorteado da roleta assim que sai</small>
+          </span>
+          <span class="switch"><input type="checkbox" id="settingAutoRemove" /><span class="switch-track" aria-hidden="true"></span></span>
+        </label>
+      </div>
+
+      <div class="setting-row">
+        <label class="switch-label" for="settingMultiWinners">
+          <span class="switch-text">
+            <strong>Vários vencedores</strong>
+            <small>Sorteia mais de um item em sequência automaticamente</small>
+          </span>
+          <span class="switch"><input type="checkbox" id="settingMultiWinners" /><span class="switch-track" aria-hidden="true"></span></span>
+        </label>
+        <div class="setting-sub" id="multiWinnersSub" style="display:none;">
+          <label for="settingWinnersCount">Quantos vencedores por sorteio?</label>
+          <input type="number" id="settingWinnersCount" min="2" max="20" value="2" class="setting-number-input" />
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <label class="switch-label" for="settingWeighted">
+          <span class="switch-text">
+            <strong>Pesos por item</strong>
+            <small>Dá mais ou menos chance a itens específicos (fatias maiores = mais chance)</small>
+          </span>
+          <span class="switch"><input type="checkbox" id="settingWeighted" /><span class="switch-track" aria-hidden="true"></span></span>
+        </label>
+        <div class="setting-sub" id="weightsSub" style="display:none;">
+          <p class="weights-empty-hint" id="weightsEmptyHint">Carregue itens na roleta para ajustar os pesos.</p>
+          <div class="weights-list" id="weightsList"></div>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <label class="switch-label" for="settingGroupMode">
+          <span class="switch-text">
+            <strong>Modo grupos</strong>
+            <small>Divide a lista em grupos aleatórios, em vez de girar a roleta</small>
+          </span>
+          <span class="switch"><input type="checkbox" id="settingGroupMode" /><span class="switch-track" aria-hidden="true"></span></span>
+        </label>
+        <div class="setting-sub" id="groupModeSub" style="display:none;">
+          <label for="settingGroupsCount">Quantos grupos?</label>
+          <input type="number" id="settingGroupsCount" min="2" max="20" value="2" class="setting-number-input" />
+          <button type="button" class="btn btn-secondary" id="btnDrawGroups" style="width:100%; justify-content:center; margin-top:4px;">🎲 Sortear grupos agora</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DE RESULTADO DE GRUPOS -->
+<div class="modal-overlay" id="groupsModalOverlay">
+  <div class="modal wheels-modal" role="dialog" aria-modal="true" aria-labelledby="groupsModalTitle">
+    <div class="modal-header">
+      <h3 id="groupsModalTitle">🎲 Grupos sorteados</h3>
+      <button type="button" class="modal-close" id="groupsModalClose" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body wheels-modal-body">
+      <div class="groups-result" id="groupsResult" aria-live="polite"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="btnCopyGroups">📋 Copiar resultado</button>
+        <button type="button" class="btn btn-primary" id="btnCloseGroups">Fechar</button>
       </div>
     </div>
   </div>

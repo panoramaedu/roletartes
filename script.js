@@ -15,8 +15,21 @@ const state = {
   currentDrawn: null,
   currentDrawnIndex: null,
   activeWheelId: null,
-  wheelsIndex: []
+  wheelsIndex: [],
+  weights: [],
+  settings: {
+    autoRemove: false,
+    multiWinners: false,
+    winnersCount: 2,
+    weighted: false,
+    groupMode: false,
+    groupsCount: 2
+  }
 };
+
+function defaultSettings() {
+  return { autoRemove: false, multiWinners: false, winnersCount: 2, weighted: false, groupMode: false, groupsCount: 2 };
+}
 
 /* ============ PALETA EDUCACIONAL ============ */
 const PALETTE = [
@@ -91,6 +104,9 @@ const dialogModalConfirm = $('dialogModalConfirm');
 const dialogModalCancel = $('dialogModalCancel');
 const templatesModalOverlay = $('templatesModalOverlay');
 const templatesList = $('templatesList');
+const settingsModalOverlay = $('settingsModalOverlay');
+const groupsModalOverlay = $('groupsModalOverlay');
+const groupsResult = $('groupsResult');
 
 /* ============ ACESSIBILIDADE / PERFORMANCE ============ */
 const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -220,6 +236,8 @@ function migrateLegacyDataIfNeeded() {
     id,
     name: legacyTitle || 'Minha Roleta',
     items, history,
+    weights: [],
+    settings: defaultSettings(),
     createdAt: Date.now(),
     updatedAt: Date.now()
   };
@@ -241,6 +259,8 @@ function persistActiveWheel() {
     name: state.title || 'Minha Roleta',
     items: state.items,
     history: state.history,
+    weights: state.weights,
+    settings: state.settings,
     createdAt: (previous && previous.createdAt) || Date.now(),
     updatedAt: Date.now()
   };
@@ -259,6 +279,8 @@ function persistActiveWheel() {
 function applyWheelDataToState(wheel) {
   state.items = Array.isArray(wheel.items) ? wheel.items : [];
   state.history = Array.isArray(wheel.history) ? wheel.history : [];
+  state.weights = Array.isArray(wheel.weights) ? wheel.weights : [];
+  state.settings = Object.assign(defaultSettings(), wheel.settings || {});
   state.title = wheel.name || 'Minha Roleta';
   state.activeWheelId = wheel.id;
   state.currentAngle = 0;
@@ -279,6 +301,7 @@ function applyWheelDataToState(wheel) {
   renderHistory();
   updateCounter();
   checkStorageQuota();
+  syncSettingsUI();
 }
 
 function switchActiveWheel(id) {
@@ -299,6 +322,8 @@ function createNewWheel(name) {
     name: name || 'Nova roleta',
     items: [],
     history: [],
+    weights: [],
+    settings: defaultSettings(),
     createdAt: Date.now(),
     updatedAt: Date.now()
   };
@@ -322,6 +347,8 @@ function duplicateWheel(id) {
     name: (source.name || 'Roleta') + ' (cópia)',
     items: [...(source.items || [])],
     history: [...(source.history || [])],
+    weights: [...(source.weights || [])],
+    settings: Object.assign(defaultSettings(), source.settings || {}),
     createdAt: Date.now(),
     updatedAt: Date.now()
   };
@@ -383,7 +410,7 @@ function deleteWheel(id) {
 
       if (id === state.activeWheelId) {
         const next = state.wheelsIndex[0];
-        const nextWheel = loadWheelData(next.id) || { id: next.id, name: next.name, items: [], history: [] };
+        const nextWheel = loadWheelData(next.id) || { id: next.id, name: next.name, items: [], history: [], weights: [], settings: defaultSettings() };
         applyWheelDataToState(nextWheel);
         localStorage.setItem(ACTIVE_WHEEL_KEY, next.id);
       }
@@ -560,6 +587,149 @@ function closeTemplatesModal() {
   lastFocusedBeforeTemplates = null;
 }
 
+/* ============ MECÂNICAS DE SORTEIO (UI) ============ */
+let lastFocusedBeforeSettings = null;
+
+function openSettingsModal() {
+  lastFocusedBeforeSettings = document.activeElement;
+  syncSettingsUI();
+  settingsModalOverlay.classList.add('active');
+  requestAnimationFrame(() => $('settingAutoRemove').focus());
+}
+
+function closeSettingsModal() {
+  settingsModalOverlay.classList.remove('active');
+  if (lastFocusedBeforeSettings && document.body.contains(lastFocusedBeforeSettings)) {
+    lastFocusedBeforeSettings.focus();
+  }
+  lastFocusedBeforeSettings = null;
+}
+
+/* Reflete state.settings nos controles do modal — chamado ao abrir o modal
+   e sempre que a roleta ativa muda, pra nunca mostrar configurações de
+   uma roleta diferente. */
+function syncSettingsUI() {
+  const s = state.settings || defaultSettings();
+  if (!$('settingAutoRemove')) return; // modal ausente (ex.: ainda não montado)
+
+  $('settingAutoRemove').checked = !!s.autoRemove;
+  $('settingMultiWinners').checked = !!s.multiWinners;
+  $('settingWinnersCount').value = s.winnersCount || 2;
+  $('multiWinnersSub').style.display = s.multiWinners ? 'flex' : 'none';
+  $('settingWeighted').checked = !!s.weighted;
+  $('weightsSub').style.display = s.weighted ? 'flex' : 'none';
+  $('settingGroupMode').checked = !!s.groupMode;
+  $('settingGroupsCount').value = s.groupsCount || 2;
+  $('groupModeSub').style.display = s.groupMode ? 'flex' : 'none';
+  if (s.weighted) renderWeightsList();
+}
+
+function renderWeightsList() {
+  const listEl = $('weightsList');
+  const emptyHint = $('weightsEmptyHint');
+  if (!listEl) return;
+  if (state.items.length === 0) {
+    listEl.innerHTML = '';
+    emptyHint.style.display = 'block';
+    return;
+  }
+  emptyHint.style.display = 'none';
+  // Garante que os pesos existem e têm o mesmo tamanho da lista de itens.
+  if (state.weights.length !== state.items.length) {
+    state.weights = state.items.map((_, i) => state.weights[i] !== undefined ? state.weights[i] : 1);
+  }
+  listEl.innerHTML = '';
+  state.items.forEach((item, i) => {
+    const type = getItemType(item);
+    const label = type === 'image' ? `Imagem #${i + 1}` : item;
+    const row = document.createElement('div');
+    row.className = 'weight-row';
+    row.innerHTML = `
+      <span class="weight-row-name" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
+      <span class="weight-stepper">
+        <button type="button" data-dir="-1" aria-label="Diminuir peso de ${escapeHtml(label)}">−</button>
+        <span class="weight-value">${state.weights[i]}</span>
+        <button type="button" data-dir="1" aria-label="Aumentar peso de ${escapeHtml(label)}">+</button>
+      </span>
+    `;
+    row.querySelectorAll('button[data-dir]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const dir = parseInt(btn.getAttribute('data-dir'), 10);
+        state.weights[i] = Math.max(1, Math.min(10, (state.weights[i] || 1) + dir));
+        row.querySelector('.weight-value').textContent = state.weights[i];
+        state.sliceLabels = null;
+        renderWheel();
+        saveState();
+      });
+    });
+    listEl.appendChild(row);
+  });
+}
+
+/* ============ MODO GRUPOS ============ */
+let lastFocusedBeforeGroups = null;
+let lastGroupsText = '';
+
+function shuffleArray(arr) {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function drawGroups() {
+  if (state.items.length === 0) {
+    showToast('⚠️ Carregue itens na roleta primeiro');
+    return;
+  }
+  const groupsCount = Math.max(2, Math.min(20, parseInt($('settingGroupsCount').value, 10) || 2));
+  if (groupsCount > state.items.length) {
+    showToast('⚠️ Mais grupos do que itens — reduza a quantidade de grupos');
+    return;
+  }
+  state.settings.groupsCount = groupsCount;
+  saveState();
+
+  const shuffled = shuffleArray(state.items);
+  const groups = Array.from({ length: groupsCount }, () => []);
+  shuffled.forEach((item, i) => groups[i % groupsCount].push(item));
+
+  renderGroupsResult(groups);
+  closeSettingsModal();
+  openGroupsModal();
+}
+
+function renderGroupsResult(groups) {
+  groupsResult.innerHTML = '';
+  const lines = [];
+  groups.forEach((group, i) => {
+    const card = document.createElement('div');
+    card.className = 'group-card';
+    const title = `Grupo ${i + 1}`;
+    const itemsText = group.map(item => getItemType(item) === 'image' ? '🖼️ Imagem' : item).join(', ');
+    card.innerHTML = `<div class="group-card-title">${title} (${group.length})</div><div class="group-card-items">${escapeHtml(itemsText)}</div>`;
+    groupsResult.appendChild(card);
+    lines.push(`${title}: ${itemsText}`);
+  });
+  lastGroupsText = lines.join('\n');
+}
+
+function openGroupsModal() {
+  lastFocusedBeforeGroups = document.activeElement;
+  groupsModalOverlay.classList.add('active');
+  requestAnimationFrame(() => $('btnCloseGroups').focus());
+}
+
+function closeGroupsModal() {
+  groupsModalOverlay.classList.remove('active');
+  if (lastFocusedBeforeGroups && document.body.contains(lastFocusedBeforeGroups)) {
+    lastFocusedBeforeGroups.focus();
+  }
+  lastFocusedBeforeGroups = null;
+}
+
 function loadState() {
   // MODO OFFLINE: usar dados embutidos
   if (IS_OFFLINE && window.OFFLINE_DATA) {
@@ -567,6 +737,8 @@ function loadState() {
     state.title = window.OFFLINE_DATA.title || 'RoletArtes Offline';
     state.theme = window.OFFLINE_DATA.theme || 'light';
     state.muted = window.OFFLINE_DATA.muted || false;
+    state.weights = window.OFFLINE_DATA.weights || [];
+    state.settings = Object.assign(defaultSettings(), window.OFFLINE_DATA.settings || {});
     
     $('titleEdit').value = state.title;
     document.title = state.title + ' — RoletArtes Offline';
@@ -582,6 +754,7 @@ function loadState() {
       assignColors();
       renderWheel();
     }
+    syncSettingsUI();
     
     // Ajustar UI para modo offline
     if (offlineSection) offlineSection.style.display = 'none';
@@ -614,7 +787,7 @@ function loadState() {
       }
       if (!wheel) {
         activeId = generateWheelId();
-        wheel = { id: activeId, name: 'Minha Roleta', items: [], history: [], createdAt: Date.now(), updatedAt: Date.now() };
+        wheel = { id: activeId, name: 'Minha Roleta', items: [], history: [], weights: [], settings: defaultSettings(), createdAt: Date.now(), updatedAt: Date.now() };
         saveWheelData(wheel);
         state.wheelsIndex = [{ id: activeId, name: wheel.name, updatedAt: wheel.updatedAt }];
         saveWheelsIndex();
@@ -702,10 +875,46 @@ function updateCounter() {
 }
 
 /* ============ CORES SEM REPETIÇÃO ADJACENTE ============ */
+/* ============ PESOS E FATIAS PROPORCIONAIS ============
+   Quando "Pesos por item" está desligado, todo item tem peso 1 (fatias iguais,
+   comportamento clássico). Ligado, os pesos guardados definem o tamanho de
+   cada fatia — e, como o giro é físico (ângulo real de parada), isso já
+   controla a probabilidade real de cada item sair, não só a aparência. */
+function getEffectiveWeights() {
+  if (!state.settings.weighted || state.weights.length !== state.items.length) {
+    return state.items.map(() => 1);
+  }
+  return state.weights.map(w => (Number.isFinite(w) && w > 0) ? w : 1);
+}
+
+function getSliceAngles() {
+  const weights = getEffectiveWeights();
+  const total = weights.reduce((a, b) => a + b, 0) || weights.length || 1;
+  let acc = 0;
+  return weights.map(w => {
+    const angle = (w / total) * Math.PI * 2;
+    const start = acc;
+    acc += angle;
+    return { start, angle, mid: start + angle / 2 };
+  });
+}
+
+function angleToIndex(slices, normalizedAngle) {
+  for (let i = 0; i < slices.length; i++) {
+    const s = slices[i];
+    if (normalizedAngle >= s.start && normalizedAngle < s.start + s.angle) return i;
+  }
+  return slices.length - 1; // fallback para erro de ponto flutuante bem no limite de 2π
+}
+
 function assignColors() {
   const n = state.items.length;
   state.colors = [];
   state.sliceLabels = null;
+  // Redimensiona os pesos junto com os itens, preservando os já definidos
+  // e completando os novos com peso padrão 1.
+  const prevWeights = state.weights;
+  state.weights = Array.from({ length: n }, (_, i) => (prevWeights[i] !== undefined ? prevWeights[i] : 1));
   if (n === 0) return;
   const P = PALETTE.length;
   let step = 1;
@@ -737,12 +946,13 @@ function computeSliceLabels() {
   if (n === 0) return;
   const size = wheelLogicalSize;
   const r = size / 2 - 4;
-  const sliceAngle = (Math.PI * 2) / n;
-  const sliceDeg = (sliceAngle * 180) / Math.PI;
+  const slices = getSliceAngles();
 
   for (let i = 0; i < n; i++) {
     const item = state.items[i];
     const type = getItemType(item);
+    const sliceAngle = slices[i].angle;
+    const sliceDeg = (sliceAngle * 180) / Math.PI;
 
     if (type === 'text' && sliceDeg >= 12 && n <= 40) {
       const fontSize = Math.max(10, Math.min(18, (sliceAngle * r * 0.4)));
@@ -776,15 +986,15 @@ function renderWheel() {
   const size = wheelLogicalSize;
   const cx = size / 2, cy = size / 2;
   const r = size / 2 - 4;
-  const sliceAngle = (Math.PI * 2) / n;
+  const slices = getSliceAngles();
   
   ctx.clearRect(0, 0, size, size);
   
   if (!state.sliceLabels || state.sliceLabels.length !== n) computeSliceLabels();
   
   for (let i = 0; i < n; i++) {
-    const start = state.currentAngle + i * sliceAngle;
-    const end = start + sliceAngle;
+    const start = state.currentAngle + slices[i].start;
+    const end = start + slices[i].angle;
     
     ctx.beginPath();
     ctx.moveTo(cx, cy);
@@ -797,7 +1007,7 @@ function renderWheel() {
     ctx.lineWidth = 2;
     ctx.stroke();
     
-    const mid = start + sliceAngle / 2;
+    const mid = start + slices[i].angle / 2;
     const tr = r * 0.72;
     const tx = cx + Math.cos(mid) * tr;
     const ty = cy + Math.sin(mid) * tr;
@@ -825,74 +1035,174 @@ function renderWheel() {
   ctx.stroke();
 }
 
-/* ============ ANIMAÇÃO DE GIRO ============ */
+/* ============ ANIMAÇÃO DE GIRO ============
+   animateSpinOnce() faz o giro físico de verdade (ângulo real de parada) e
+   resolve com o índice vencedor — sem decidir o resultado antes, só observa
+   onde parou. Isso é o que torna o peso por item honesto: fatia maior =
+   mais ângulo do círculo = mais chance real de o ponteiro parar nela. */
+function animateSpinOnce() {
+  return new Promise(resolve => {
+    state.spinning = true;
+    wheelCanvas.classList.add('spinning');
+    wheelWrapper.classList.add('spinning');
+    wheelStatus.textContent = 'Girando...';
+
+    const slices = getSliceAngles();
+    const extraTurns = prefersReducedMotion ? 1.2 : (5 + Math.random() * 3);
+    const randomFinal = Math.random() * Math.PI * 2;
+    const totalRotation = extraTurns * Math.PI * 2 + randomFinal;
+    const startAngle = state.currentAngle;
+    const duration = prefersReducedMotion ? 900 : (4500 + Math.random() * 1500);
+    const startTime = performance.now();
+
+    let lastTickSlice = -1;
+
+    function animate(now) {
+      const elapsed = now - startTime;
+      const t = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      state.currentAngle = startAngle + totalRotation * eased;
+      renderWheel();
+
+      const pointerAngle = -Math.PI / 2;
+      const normalizedAngle = ((pointerAngle - state.currentAngle) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+      const currentSlice = angleToIndex(slices, normalizedAngle);
+      if (currentSlice !== lastTickSlice) {
+        lastTickSlice = currentSlice;
+        playTick();
+      }
+
+      if (t < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        state.spinning = false;
+        wheelCanvas.classList.remove('spinning');
+        wheelWrapper.classList.remove('spinning');
+        const finalNormalized = ((pointerAngle - state.currentAngle) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+        const winningIndex = angleToIndex(slices, finalNormalized);
+        resolve(winningIndex);
+      }
+    }
+
+    requestAnimationFrame(animate);
+  });
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
 function spinWheel() {
   if (state.spinning || state.items.length === 0) return;
+  if (state.settings.multiWinners && state.settings.winnersCount > 1 && state.items.length > 1) {
+    runMultiSpin(Math.min(state.settings.winnersCount, state.items.length));
+  } else {
+    runSingleSpin();
+  }
+}
+
+async function runSingleSpin() {
+  let winningIndex;
   if (state.items.length === 1) {
-    drawItem(0);
-    return;
+    winningIndex = 0;
+  } else {
+    winningIndex = await animateSpinOnce();
+    playWin();
   }
-  
-  state.spinning = true;
-  wheelCanvas.classList.add('spinning');
-  wheelWrapper.classList.add('spinning');
-  wheelStatus.textContent = 'Girando...';
-  
-  const extraTurns = prefersReducedMotion ? 1.2 : (5 + Math.random() * 3);
-  const randomFinal = Math.random() * Math.PI * 2;
-  const totalRotation = extraTurns * Math.PI * 2 + randomFinal;
-  const startAngle = state.currentAngle;
-  const duration = prefersReducedMotion ? 900 : (4500 + Math.random() * 1500);
-  const startTime = performance.now();
-  
-  let lastTickSlice = -1;
-  
-  function animate(now) {
-    const elapsed = now - startTime;
-    const t = Math.min(elapsed / duration, 1);
-    const eased = 1 - Math.pow(1 - t, 3);
-    state.currentAngle = startAngle + totalRotation * eased;
-    renderWheel();
-    
-    const n = state.items.length;
-    const sliceAngle = (Math.PI * 2) / n;
-    const pointerAngle = -Math.PI / 2;
-    const normalizedAngle = ((pointerAngle - state.currentAngle) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-    const currentSlice = Math.floor(normalizedAngle / sliceAngle);
-    if (currentSlice !== lastTickSlice) {
-      lastTickSlice = currentSlice;
-      playTick();
-    }
-    
-    if (t < 1) {
-      requestAnimationFrame(animate);
+  finishSingleSpin(winningIndex);
+}
+
+/* Sorteio de vários vencedores em sequência: gira sobre uma cópia do grupo,
+   que vai encolhendo a cada acerto (visualmente também), sem tocar na
+   roleta "de verdade" até o fim — assim dá pra restaurá-la caso a
+   eliminação automática esteja desligada. */
+async function runMultiSpin(count) {
+  const savedItems = state.items, savedColors = state.colors, savedWeights = state.weights;
+  const workingItems = [...state.items];
+  const workingColors = [...state.colors];
+  const workingWeights = [...getEffectiveWeights()];
+  const workingIndices = state.items.map((_, i) => i);
+
+  state.items = workingItems;
+  state.colors = workingColors;
+  state.weights = workingWeights;
+  state.sliceLabels = null;
+
+  const winners = [];
+  for (let i = 0; i < count && state.items.length > 0; i++) {
+    let idx;
+    if (state.items.length === 1) {
+      idx = 0;
+      state.sliceLabels = null;
+      renderWheel();
+      await sleep(prefersReducedMotion ? 150 : 500);
     } else {
-      state.spinning = false;
-      wheelCanvas.classList.remove('spinning');
-      wheelWrapper.classList.remove('spinning');
-      const finalNormalized = ((pointerAngle - state.currentAngle) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-      const winningIndex = Math.floor(finalNormalized / sliceAngle) % n;
-      playWin();
-      drawItem(winningIndex);
+      idx = await animateSpinOnce();
     }
+    winners.push({ item: state.items[idx], color: state.colors[idx], originalIndex: workingIndices[idx] });
+    state.items.splice(idx, 1);
+    state.colors.splice(idx, 1);
+    state.weights.splice(idx, 1);
+    workingIndices.splice(idx, 1);
+    state.sliceLabels = null;
+    if (i < count - 1 && state.items.length > 0) await sleep(500);
   }
-  
-  requestAnimationFrame(animate);
+
+  state.items = savedItems;
+  state.colors = savedColors;
+  state.weights = savedWeights;
+  state.sliceLabels = null;
+
+  winners.forEach(w => addToHistory(w.item, w.color));
+
+  if (state.settings.autoRemove) {
+    winners.map(w => w.originalIndex).sort((a, b) => b - a).forEach(idx => {
+      state.items.splice(idx, 1);
+      state.colors.splice(idx, 1);
+      if (state.weights.length > idx) state.weights.splice(idx, 1);
+    });
+    state.sliceLabels = null;
+  }
+
+  renderWheel();
+  updateCounter();
+  saveState();
+  playWin();
+  finishMultiSpin(winners);
 }
 
 /* ============ SORTEIO E MODAL ============ */
-function drawItem(index) {
+function finishSingleSpin(index) {
   const item = state.items[index];
   const color = state.colors[index] || null;
   state.currentDrawn = item;
   state.currentDrawnIndex = index;
   wheelStatus.textContent = 'Sorteado!';
-  showModal(item);
   addToHistory(item, color);
+
+  if (state.settings.autoRemove) {
+    state.items.splice(index, 1);
+    state.colors.splice(index, 1);
+    if (state.weights.length > index) state.weights.splice(index, 1);
+    state.sliceLabels = null;
+    linksInput.value = state.items.join('\n');
+    renderWheel();
+    updateCounter();
+    saveState();
+    // O item já saiu da roleta — não faz sentido oferecer "Remover" de novo.
+    state.currentDrawnIndex = null;
+  }
+
+  showModal(item);
   burstConfetti();
 }
 
+function resetModalUI() {
+  modalImageWrap.classList.remove('winners-mode');
+  $('btnRemove').style.display = '';
+  $('btnContinue').textContent = '▶ Continuar';
+}
+
 function showModal(item) {
+  resetModalUI();
   lastFocusedBeforeOverlay = document.activeElement;
   modalOverlay.classList.add('active');
   modalImageWrap.innerHTML = '';
@@ -925,7 +1235,50 @@ function showModal(item) {
     modalImageWrap.appendChild(textDiv);
   }
   
-  requestAnimationFrame(() => $('btnRemove').focus());
+  // Se a eliminação automática já tirou o item da roleta, não faz sentido
+  // oferecer "Remover" de novo.
+  if (state.currentDrawnIndex === null) {
+    $('btnRemove').style.display = 'none';
+  }
+  
+  requestAnimationFrame(() => {
+    const target = $('btnRemove').style.display === 'none' ? $('btnContinue') : $('btnRemove');
+    target.focus();
+  });
+}
+
+function finishMultiSpin(winners) {
+  resetModalUI();
+  state.currentDrawn = winners.length ? winners[winners.length - 1].item : null;
+  state.currentDrawnIndex = null;
+  wheelStatus.textContent = 'Sorteio concluído!';
+
+  lastFocusedBeforeOverlay = document.activeElement;
+  modalOverlay.classList.add('active');
+  modalTitle.textContent = `🏆 ${winners.length} vencedor${winners.length !== 1 ? 'es' : ''}!`;
+  modalImageWrap.innerHTML = '';
+  modalImageWrap.classList.remove('text-mode');
+  modalImageWrap.classList.add('winners-mode');
+
+  const list = document.createElement('div');
+  list.className = 'winners-list';
+  winners.forEach((w, i) => {
+    const row = document.createElement('div');
+    row.className = 'winner-row';
+    row.style.setProperty('--item-accent', w.color || 'var(--primary)');
+    const type = getItemType(w.item);
+    const media = type === 'image'
+      ? `<img src="${escapeHtml(w.item)}" alt="" onerror="this.style.opacity=0.3" />`
+      : `<div class="winner-row-text">${escapeHtml(w.item)}</div>`;
+    row.innerHTML = `<span class="winner-row-num">#${i + 1}</span>${media}`;
+    list.appendChild(row);
+  });
+  modalImageWrap.appendChild(list);
+
+  $('btnRemove').style.display = 'none';
+  $('btnContinue').textContent = '✅ Concluir';
+
+  requestAnimationFrame(() => $('btnContinue').focus());
 }
 
 function closeModal() {
@@ -1099,6 +1452,8 @@ async function generateOfflineHTML() {
       title: state.title,
       theme: state.theme,
       muted: state.muted,
+      weights: state.weights,
+      settings: state.settings,
       generatedAt: new Date().toISOString()
     };
     
@@ -1126,6 +1481,7 @@ ${cssText}
   <input type="text" class="title-edit" id="titleEdit" placeholder="Digite o título da roleta..." value="${escapeHtml(state.title)}" />
   <div class="header-actions">
     <button type="button" class="icon-btn" id="btnWheels" title="Minhas roletas" aria-label="Abrir gerenciador de roletas salvas" style="display:none;">🗂️</button>
+    <button type="button" class="icon-btn" id="btnSpinSettings" title="Mecânicas de sorteio" aria-label="Abrir configurações de mecânicas de sorteio">⚙️</button>
     <button type="button" class="icon-btn" id="btnMute" title="Ativar/desativar som" aria-label="Ativar ou desativar som" aria-pressed="${state.muted}">${state.muted ? '🔇' : '🔊'}</button>
     <button type="button" class="icon-btn" id="btnTheme" title="Alternar tema" aria-label="Alternar entre tema claro e escuro">${state.theme === 'dark' ? '☀️' : '🌙'}</button>
     <button type="button" class="icon-btn" id="btnPresent" title="Modo apresentação" aria-label="Abrir modo apresentação">⛶</button>
@@ -1234,6 +1590,87 @@ ${cssText}
     <div class="modal-body wheels-modal-body">
       <p class="templates-hint">Escolha um modelo para preencher o campo de itens.</p>
       <div class="templates-list" id="templatesList" aria-live="polite"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="settingsModalOverlay">
+  <div class="modal wheels-modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+    <div class="modal-header">
+      <h3 id="settingsModalTitle">⚙️ Mecânicas de sorteio</h3>
+      <button type="button" class="modal-close" id="settingsModalClose" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body wheels-modal-body">
+      <p class="templates-hint">Tudo aqui é opcional e fica desligado por padrão.</p>
+
+      <div class="setting-row">
+        <label class="switch-label" for="settingAutoRemove">
+          <span class="switch-text">
+            <strong>Eliminar automaticamente</strong>
+            <small>Remove o item sorteado da roleta assim que sai</small>
+          </span>
+          <span class="switch"><input type="checkbox" id="settingAutoRemove" /><span class="switch-track" aria-hidden="true"></span></span>
+        </label>
+      </div>
+
+      <div class="setting-row">
+        <label class="switch-label" for="settingMultiWinners">
+          <span class="switch-text">
+            <strong>Vários vencedores</strong>
+            <small>Sorteia mais de um item em sequência automaticamente</small>
+          </span>
+          <span class="switch"><input type="checkbox" id="settingMultiWinners" /><span class="switch-track" aria-hidden="true"></span></span>
+        </label>
+        <div class="setting-sub" id="multiWinnersSub" style="display:none;">
+          <label for="settingWinnersCount">Quantos vencedores por sorteio?</label>
+          <input type="number" id="settingWinnersCount" min="2" max="20" value="2" class="setting-number-input" />
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <label class="switch-label" for="settingWeighted">
+          <span class="switch-text">
+            <strong>Pesos por item</strong>
+            <small>Dá mais ou menos chance a itens específicos</small>
+          </span>
+          <span class="switch"><input type="checkbox" id="settingWeighted" /><span class="switch-track" aria-hidden="true"></span></span>
+        </label>
+        <div class="setting-sub" id="weightsSub" style="display:none;">
+          <p class="weights-empty-hint" id="weightsEmptyHint">Carregue itens na roleta para ajustar os pesos.</p>
+          <div class="weights-list" id="weightsList"></div>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <label class="switch-label" for="settingGroupMode">
+          <span class="switch-text">
+            <strong>Modo grupos</strong>
+            <small>Divide a lista em grupos aleatórios</small>
+          </span>
+          <span class="switch"><input type="checkbox" id="settingGroupMode" /><span class="switch-track" aria-hidden="true"></span></span>
+        </label>
+        <div class="setting-sub" id="groupModeSub" style="display:none;">
+          <label for="settingGroupsCount">Quantos grupos?</label>
+          <input type="number" id="settingGroupsCount" min="2" max="20" value="2" class="setting-number-input" />
+          <button type="button" class="btn btn-secondary" id="btnDrawGroups" style="width:100%; justify-content:center; margin-top:4px;">🎲 Sortear grupos agora</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="groupsModalOverlay">
+  <div class="modal wheels-modal" role="dialog" aria-modal="true" aria-labelledby="groupsModalTitle">
+    <div class="modal-header">
+      <h3 id="groupsModalTitle">🎲 Grupos sorteados</h3>
+      <button type="button" class="modal-close" id="groupsModalClose" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body wheels-modal-body">
+      <div class="groups-result" id="groupsResult" aria-live="polite"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="btnCopyGroups">📋 Copiar resultado</button>
+        <button type="button" class="btn btn-primary" id="btnCloseGroups">Fechar</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1499,6 +1936,69 @@ templatesModalOverlay.addEventListener('keydown', e => {
   if (e.key === 'Tab') trapFocus(templatesModalOverlay.querySelector('.modal'), e);
 });
 
+$('btnSpinSettings').addEventListener('click', openSettingsModal);
+$('settingsModalClose').addEventListener('click', closeSettingsModal);
+settingsModalOverlay.addEventListener('click', e => { if (e.target === settingsModalOverlay) closeSettingsModal(); });
+settingsModalOverlay.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { e.stopPropagation(); closeSettingsModal(); }
+  if (e.key === 'Tab') trapFocus(settingsModalOverlay.querySelector('.modal'), e);
+});
+
+$('settingAutoRemove').addEventListener('change', e => {
+  state.settings.autoRemove = e.target.checked;
+  saveState();
+});
+
+$('settingMultiWinners').addEventListener('change', e => {
+  state.settings.multiWinners = e.target.checked;
+  $('multiWinnersSub').style.display = e.target.checked ? 'flex' : 'none';
+  saveState();
+});
+$('settingWinnersCount').addEventListener('change', e => {
+  const v = Math.max(2, Math.min(20, parseInt(e.target.value, 10) || 2));
+  e.target.value = v;
+  state.settings.winnersCount = v;
+  saveState();
+});
+
+$('settingWeighted').addEventListener('change', e => {
+  state.settings.weighted = e.target.checked;
+  $('weightsSub').style.display = e.target.checked ? 'flex' : 'none';
+  if (e.target.checked) renderWeightsList();
+  state.sliceLabels = null;
+  renderWheel();
+  saveState();
+});
+
+$('settingGroupMode').addEventListener('change', e => {
+  state.settings.groupMode = e.target.checked;
+  $('groupModeSub').style.display = e.target.checked ? 'flex' : 'none';
+  saveState();
+});
+$('settingGroupsCount').addEventListener('change', e => {
+  const v = Math.max(2, Math.min(20, parseInt(e.target.value, 10) || 2));
+  e.target.value = v;
+  state.settings.groupsCount = v;
+  saveState();
+});
+$('btnDrawGroups').addEventListener('click', drawGroups);
+
+$('groupsModalClose').addEventListener('click', closeGroupsModal);
+$('btnCloseGroups').addEventListener('click', closeGroupsModal);
+groupsModalOverlay.addEventListener('click', e => { if (e.target === groupsModalOverlay) closeGroupsModal(); });
+groupsModalOverlay.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { e.stopPropagation(); closeGroupsModal(); }
+  if (e.key === 'Tab') trapFocus(groupsModalOverlay.querySelector('.modal'), e);
+});
+$('btnCopyGroups').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(lastGroupsText);
+    showToast('📋 Resultado copiado!');
+  } catch(e) {
+    showToast('⚠️ Não foi possível copiar automaticamente');
+  }
+});
+
 dialogModalConfirm.addEventListener('click', () => closeDialog(true));
 dialogModalCancel.addEventListener('click', () => closeDialog(false));
 $('dialogModalClose').addEventListener('click', () => closeDialog(false));
@@ -1589,7 +2089,9 @@ document.addEventListener('keydown', e => {
     }
   }
   const isSpinTrigger = e.key === ' ' || (e.key === 'Enter' && e.target === wheelCanvas);
-  if (isSpinTrigger && !state.spinning && !modalOverlay.classList.contains('active') && !wheelsModalOverlay.classList.contains('active') && !templatesModalOverlay.classList.contains('active')) {
+  const anyOverlayActive = [modalOverlay, wheelsModalOverlay, templatesModalOverlay, settingsModalOverlay, groupsModalOverlay, dialogModalOverlay]
+    .some(el => el.classList.contains('active'));
+  if (isSpinTrigger && !state.spinning && !anyOverlayActive) {
     e.preventDefault();
     spinWheel();
   }
