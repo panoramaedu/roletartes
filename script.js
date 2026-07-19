@@ -24,6 +24,38 @@ const PALETTE = [
   '#ef4444', '#84cc16', '#f97316', '#8b5cf6', '#14b8a6', '#eab308'
 ];
 
+/* ============ MODELOS PRONTOS ============ */
+const TEMPLATES = [
+  {
+    id: 'numbers_1_30',
+    icon: '🔢',
+    name: 'Números 1 a 30',
+    desc: 'Sequência numérica pronta para sorteios simples',
+    build: () => Array.from({ length: 30 }, (_, i) => String(i + 1))
+  },
+  {
+    id: 'yes_no',
+    icon: '🤔',
+    name: 'Sim ou Não',
+    desc: 'Roleta de decisão rápida com duas opções',
+    build: () => ['Sim', 'Não']
+  },
+  {
+    id: 'attendance',
+    icon: '🧑\u200d🎓',
+    name: 'Lista de presença em branco',
+    desc: '15 vagas prontas — é só substituir pelos nomes da turma',
+    build: () => Array.from({ length: 15 }, (_, i) => `Aluno ${i + 1}`)
+  },
+  {
+    id: 'prizes',
+    icon: '🎁',
+    name: 'Sorteio de prêmios',
+    desc: 'Modelo de roleta de premiação para dinâmicas e eventos',
+    build: () => ['🥇 1º lugar', '🥈 2º lugar', '🥉 3º lugar', '🎁 Prêmio surpresa', '🎟️ Vale-desconto', '😢 Tente novamente']
+  }
+];
+
 /* ============ ELEMENTOS ============ */
 const $ = id => document.getElementById(id);
 const linksInput = $('linksInput');
@@ -57,6 +89,8 @@ const dialogModalMessage = $('dialogModalMessage');
 const dialogModalInput = $('dialogModalInput');
 const dialogModalConfirm = $('dialogModalConfirm');
 const dialogModalCancel = $('dialogModalCancel');
+const templatesModalOverlay = $('templatesModalOverlay');
+const templatesList = $('templatesList');
 
 /* ============ ACESSIBILIDADE / PERFORMANCE ============ */
 const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -462,6 +496,68 @@ function closeDialog(confirmed) {
     ($('btnNewWheel') || wheelsModalOverlay).focus();
   }
   lastFocusedBeforeDialog = null;
+}
+
+/* ============ MODELOS PRONTOS (UI) ============ */
+let lastFocusedBeforeTemplates = null;
+
+function renderTemplatesList() {
+  templatesList.innerHTML = '';
+  TEMPLATES.forEach(t => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'template-card';
+    btn.innerHTML = `
+      <span class="template-card-icon" aria-hidden="true">${t.icon}</span>
+      <span class="template-card-info">
+        <span class="template-card-name">${escapeHtml(t.name)}</span>
+        <span class="template-card-desc">${escapeHtml(t.desc)}</span>
+      </span>
+    `;
+    btn.addEventListener('click', () => applyTemplate(t));
+    templatesList.appendChild(btn);
+  });
+}
+
+function applyTemplate(template) {
+  const items = template.build();
+  const doApply = () => {
+    linksInput.value = items.join('\n');
+    linksInput.dispatchEvent(new Event('input'));
+    closeTemplatesModal();
+    showToast(`📋 Modelo "${template.name}" preenchido — revise e clique em Carregar`);
+    requestAnimationFrame(() => linksInput.focus());
+  };
+
+  if (linksInput.value.trim().length > 0) {
+    openDialog({
+      title: '📋 Substituir itens atuais?',
+      message: `Isso vai apagar o que está escrito no campo de itens e colocar o modelo "${template.name}" no lugar. O que já foi carregado na roleta não é afetado até você clicar em Carregar novamente.`,
+      confirmLabel: 'Substituir',
+      danger: true,
+      onConfirm: doApply
+    });
+  } else {
+    doApply();
+  }
+}
+
+function openTemplatesModal() {
+  lastFocusedBeforeTemplates = document.activeElement;
+  renderTemplatesList();
+  templatesModalOverlay.classList.add('active');
+  requestAnimationFrame(() => {
+    const first = templatesList.querySelector('.template-card');
+    if (first) first.focus();
+  });
+}
+
+function closeTemplatesModal() {
+  templatesModalOverlay.classList.remove('active');
+  if (lastFocusedBeforeTemplates && document.body.contains(lastFocusedBeforeTemplates)) {
+    lastFocusedBeforeTemplates.focus();
+  }
+  lastFocusedBeforeTemplates = null;
 }
 
 function loadState() {
@@ -1055,6 +1151,7 @@ ${cssText}
     
     <div class="btn-row">
       <button type="button" class="btn btn-primary" id="btnLoad">🎯 Carregar</button>
+      <button type="button" class="btn btn-secondary" id="btnTemplates">📋 Usar modelo</button>
       <button type="button" class="btn btn-secondary" id="btnExport">💾 Exportar JSON</button>
       <button type="button" class="btn btn-secondary" id="btnImport">📂 Importar</button>
       <input type="file" id="fileInput" class="file-input" accept=".json" aria-hidden="true" tabindex="-1" />
@@ -1124,6 +1221,19 @@ ${cssText}
         <button type="button" class="btn btn-secondary" id="dialogModalCancel">Cancelar</button>
         <button type="button" class="btn btn-primary" id="dialogModalConfirm">Confirmar</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="templatesModalOverlay">
+  <div class="modal wheels-modal" role="dialog" aria-modal="true" aria-labelledby="templatesModalTitle">
+    <div class="modal-header">
+      <h3 id="templatesModalTitle">📋 Modelos prontos</h3>
+      <button type="button" class="modal-close" id="templatesModalClose" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body wheels-modal-body">
+      <p class="templates-hint">Escolha um modelo para preencher o campo de itens.</p>
+      <div class="templates-list" id="templatesList" aria-live="polite"></div>
     </div>
   </div>
 </div>
@@ -1382,6 +1492,13 @@ $('btnNewWheel').addEventListener('click', () => {
   });
 });
 
+$('btnTemplates').addEventListener('click', openTemplatesModal);
+$('templatesModalClose').addEventListener('click', closeTemplatesModal);
+templatesModalOverlay.addEventListener('click', e => { if (e.target === templatesModalOverlay) closeTemplatesModal(); });
+templatesModalOverlay.addEventListener('keydown', e => {
+  if (e.key === 'Tab') trapFocus(templatesModalOverlay.querySelector('.modal'), e);
+});
+
 dialogModalConfirm.addEventListener('click', () => closeDialog(true));
 dialogModalCancel.addEventListener('click', () => closeDialog(false));
 $('dialogModalClose').addEventListener('click', () => closeDialog(false));
@@ -1467,10 +1584,12 @@ document.addEventListener('keydown', e => {
       closeModal();
     } else if (wheelsModalOverlay.classList.contains('active')) {
       closeWheelsModal();
+    } else if (templatesModalOverlay.classList.contains('active')) {
+      closeTemplatesModal();
     }
   }
   const isSpinTrigger = e.key === ' ' || (e.key === 'Enter' && e.target === wheelCanvas);
-  if (isSpinTrigger && !state.spinning && !modalOverlay.classList.contains('active') && !wheelsModalOverlay.classList.contains('active')) {
+  if (isSpinTrigger && !state.spinning && !modalOverlay.classList.contains('active') && !wheelsModalOverlay.classList.contains('active') && !templatesModalOverlay.classList.contains('active')) {
     e.preventDefault();
     spinWheel();
   }

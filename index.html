@@ -51,6 +51,7 @@
     
     <div class="btn-row">
       <button type="button" class="btn btn-primary" id="btnLoad">🎯 Carregar</button>
+      <button type="button" class="btn btn-secondary" id="btnTemplates">📋 Usar modelo</button>
       <button type="button" class="btn btn-secondary" id="btnExport">💾 Exportar JSON</button>
       <button type="button" class="btn btn-secondary" id="btnImport">📂 Importar</button>
       <input type="file" id="fileInput" class="file-input" accept=".json" aria-hidden="true" tabindex="-1" />
@@ -128,6 +129,20 @@
         <button type="button" class="btn btn-secondary" id="dialogModalCancel">Cancelar</button>
         <button type="button" class="btn btn-primary" id="dialogModalConfirm">Confirmar</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DE MODELOS PRONTOS -->
+<div class="modal-overlay" id="templatesModalOverlay">
+  <div class="modal wheels-modal" role="dialog" aria-modal="true" aria-labelledby="templatesModalTitle">
+    <div class="modal-header">
+      <h3 id="templatesModalTitle">📋 Modelos prontos</h3>
+      <button type="button" class="modal-close" id="templatesModalClose" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body wheels-modal-body">
+      <p class="templates-hint">Escolha um modelo para preencher o campo de itens. Você ainda pode editar tudo antes de clicar em Carregar.</p>
+      <div class="templates-list" id="templatesList" aria-live="polite"></div>
     </div>
   </div>
 </div>
