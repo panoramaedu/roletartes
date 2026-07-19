@@ -10,6 +10,7 @@ const state = {
   history: [],
   muted: false,
   theme: 'light',
+  colorTheme: 'violet',
   title: 'Minha Roleta',
   presentationMode: false,
   currentDrawn: null,
@@ -23,12 +24,13 @@ const state = {
     winnersCount: 2,
     weighted: false,
     groupMode: false,
-    groupsCount: 2
+    groupsCount: 2,
+    countdown: false
   }
 };
 
 function defaultSettings() {
-  return { autoRemove: false, multiWinners: false, winnersCount: 2, weighted: false, groupMode: false, groupsCount: 2 };
+  return { autoRemove: false, multiWinners: false, winnersCount: 2, weighted: false, groupMode: false, groupsCount: 2, countdown: false };
 }
 
 /* ============ PALETA EDUCACIONAL ============ */
@@ -70,6 +72,16 @@ const TEMPLATES = [
 ];
 
 /* ============ ELEMENTOS ============ */
+/* ============ TEMAS DE COR ============ */
+const COLOR_THEMES = [
+  { id: 'violet', name: 'Violeta (padrão)', swatches: ['#7c3aed', '#06b6d4', '#f59e0b'] },
+  { id: 'halloween', name: 'Halloween', swatches: ['#ea580c', '#7c3aed', '#a3e635'] },
+  { id: 'natal', name: 'Natal', swatches: ['#dc2626', '#16a34a', '#fbbf24'] },
+  { id: 'praia', name: 'Praia', swatches: ['#0ea5e9', '#06b6d4', '#fbbf24'] },
+  { id: 'candy', name: 'Candy', swatches: ['#ec4899', '#a78bfa', '#34d399'] },
+  { id: 'floresta', name: 'Floresta', swatches: ['#15803d', '#0891b2', '#b45309'] }
+];
+
 const $ = id => document.getElementById(id);
 const linksInput = $('linksInput');
 const counterHint = $('counterHint');
@@ -107,6 +119,8 @@ const templatesList = $('templatesList');
 const settingsModalOverlay = $('settingsModalOverlay');
 const groupsModalOverlay = $('groupsModalOverlay');
 const groupsResult = $('groupsResult');
+const colorThemeModalOverlay = $('colorThemeModalOverlay');
+const colorThemeGrid = $('colorThemeGrid');
 
 /* ============ ACESSIBILIDADE / PERFORMANCE ============ */
 const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -207,6 +221,7 @@ function saveState() {
   if (IS_OFFLINE) return; // Não salvar no modo offline
   try {
     localStorage.setItem('roletartes_theme', state.theme);
+    localStorage.setItem('roletartes_color_theme', state.colorTheme);
     localStorage.setItem('roletartes_muted', state.muted);
     persistActiveWheel();
     checkStorageQuota();
@@ -613,6 +628,7 @@ function syncSettingsUI() {
   if (!$('settingAutoRemove')) return; // modal ausente (ex.: ainda não montado)
 
   $('settingAutoRemove').checked = !!s.autoRemove;
+  $('settingCountdown').checked = !!s.countdown;
   $('settingMultiWinners').checked = !!s.multiWinners;
   $('settingWinnersCount').value = s.winnersCount || 2;
   $('multiWinnersSub').style.display = s.multiWinners ? 'flex' : 'none';
@@ -736,6 +752,7 @@ function loadState() {
     state.items = window.OFFLINE_DATA.items || [];
     state.title = window.OFFLINE_DATA.title || 'RoletArtes Offline';
     state.theme = window.OFFLINE_DATA.theme || 'light';
+    state.colorTheme = window.OFFLINE_DATA.colorTheme || 'violet';
     state.muted = window.OFFLINE_DATA.muted || false;
     state.weights = window.OFFLINE_DATA.weights || [];
     state.settings = Object.assign(defaultSettings(), window.OFFLINE_DATA.settings || {});
@@ -743,6 +760,7 @@ function loadState() {
     $('titleEdit').value = state.title;
     document.title = state.title + ' — RoletArtes Offline';
     applyTheme();
+    applyColorTheme();
     
     if (state.muted) {
       $('btnMute').textContent = '🔇';
@@ -771,8 +789,11 @@ function loadState() {
     state.wheelsIndex = loadWheelsIndex();
     
     const theme = localStorage.getItem('roletartes_theme');
+    const colorTheme = localStorage.getItem('roletartes_color_theme');
     const muted = localStorage.getItem('roletartes_muted');
     if (theme) { state.theme = theme; applyTheme(); }
+    if (colorTheme) state.colorTheme = colorTheme;
+    applyColorTheme();
     if (muted === 'true') { state.muted = true; $('btnMute').textContent = '🔇'; $('btnMute').setAttribute('aria-pressed', 'true'); }
     
     let activeId = localStorage.getItem(ACTIVE_WHEEL_KEY);
@@ -1090,12 +1111,58 @@ function animateSpinOnce() {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-function spinWheel() {
-  if (state.spinning || state.items.length === 0) return;
-  if (state.settings.multiWinners && state.settings.winnersCount > 1 && state.items.length > 1) {
-    runMultiSpin(Math.min(state.settings.winnersCount, state.items.length));
-  } else {
-    runSingleSpin();
+/* Contagem regressiva visual (3, 2, 1) antes do giro — puramente estética,
+   não interfere no sorteio em si. Sob "reduzir movimento", o CSS global já
+   deixa a animação quase instantânea, então aqui só encurtamos a pausa
+   entre os números pra não parecer travado. */
+function runCountdown() {
+  const overlay = $('countdownOverlay');
+  if (!overlay) return Promise.resolve();
+  return new Promise(resolve => {
+    wheelStatus.textContent = 'Preparando...';
+    wheelCanvas.classList.add('spinning');
+    wheelWrapper.classList.add('spinning');
+    overlay.classList.add('active');
+    const steps = ['3', '2', '1', 'Vai!'];
+    const stepDuration = prefersReducedMotion ? 280 : 700;
+    let i = 0;
+    function showNext() {
+      if (i >= steps.length) {
+        overlay.classList.remove('active');
+        overlay.innerHTML = '';
+        wheelCanvas.classList.remove('spinning');
+        wheelWrapper.classList.remove('spinning');
+        resolve();
+        return;
+      }
+      overlay.innerHTML = `<span class="countdown-number">${steps[i]}</span>`;
+      playCountdownBeep(i === steps.length - 1);
+      i++;
+      setTimeout(showNext, stepDuration);
+    }
+    showNext();
+  });
+}
+
+// Trava a reentrada durante todo o fluxo de giro (incluindo a contagem
+// regressiva e as pausas entre giros de um sorteio de vários vencedores),
+// independente do estado.spinning, que só cobre a animação física em si.
+let spinLocked = false;
+
+async function spinWheel() {
+  if (spinLocked || state.spinning || state.items.length === 0) return;
+  spinLocked = true;
+  try {
+    if (state.settings.countdown) {
+      await runCountdown();
+    }
+    if (state.settings.multiWinners && state.settings.winnersCount > 1 && state.items.length > 1) {
+      await runMultiSpin(Math.min(state.settings.winnersCount, state.items.length));
+    } else {
+      await runSingleSpin();
+    }
+  } finally {
+    spinLocked = false;
   }
 }
 
@@ -1364,15 +1431,26 @@ function renderHistory() {
 }
 
 /* ============ CONFETE ============ */
-const CONFETTI_COLORS = ['#7c3aed', '#06b6d4', '#f59e0b', '#10b981', '#ec4899', '#3b82f6'];
+const CONFETTI_FALLBACK_COLORS = ['#7c3aed', '#06b6d4', '#f59e0b', '#10b981', '#ec4899', '#3b82f6'];
+function getConfettiColors() {
+  const styles = getComputedStyle(document.documentElement);
+  const themed = [
+    styles.getPropertyValue('--primary').trim(),
+    styles.getPropertyValue('--accent-cyan').trim(),
+    styles.getPropertyValue('--accent-amber').trim(),
+    '#10b981', '#ec4899', '#3b82f6'
+  ].filter(Boolean);
+  return themed.length >= 3 ? themed : CONFETTI_FALLBACK_COLORS;
+}
 function burstConfetti() {
   if (prefersReducedMotion || !confettiLayer) return;
+  const colors = getConfettiColors();
   const count = 46;
   for (let i = 0; i < count; i++) {
     const piece = document.createElement('div');
     piece.className = 'confetti-piece';
     piece.style.left = Math.random() * 100 + 'vw';
-    piece.style.background = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
+    piece.style.background = colors[i % colors.length];
     piece.style.animationDuration = (2 + Math.random() * 1.4) + 's';
     piece.style.animationDelay = (Math.random() * 0.3) + 's';
     confettiLayer.appendChild(piece);
@@ -1423,10 +1501,76 @@ function playWin() {
   });
 }
 
+function playCountdownBeep(isFinal) {
+  if (state.muted) return;
+  const ac = getAudioCtx();
+  if (!ac) return;
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.type = 'square';
+  osc.frequency.value = isFinal ? 880 : 440;
+  const dur = isFinal ? 0.18 : 0.1;
+  gain.gain.setValueAtTime(0.06, ac.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+  osc.connect(gain); gain.connect(ac.destination);
+  osc.start(); osc.stop(ac.currentTime + dur);
+}
+
 /* ============ TEMA ============ */
 function applyTheme() {
   document.documentElement.setAttribute('data-theme', state.theme);
   $('btnTheme').textContent = state.theme === 'dark' ? '☀️' : '🌙';
+}
+
+function applyColorTheme() {
+  document.documentElement.setAttribute('data-color-theme', state.colorTheme || 'violet');
+}
+
+let lastFocusedBeforeColorTheme = null;
+
+function renderColorThemeGrid() {
+  if (!colorThemeGrid) return;
+  colorThemeGrid.innerHTML = '';
+  COLOR_THEMES.forEach(t => {
+    const isActive = (state.colorTheme || 'violet') === t.id;
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'color-theme-card' + (isActive ? ' active' : '');
+    card.setAttribute('aria-pressed', String(isActive));
+    card.innerHTML = `
+      <span class="color-theme-swatches" aria-hidden="true">
+        ${t.swatches.map(c => `<span class="color-theme-swatch" style="background:${c}"></span>`).join('')}
+      </span>
+      <span class="color-theme-name">${escapeHtml(t.name)}</span>
+      <span class="color-theme-check">${isActive ? '✓ Ativo' : ''}</span>
+    `;
+    card.addEventListener('click', () => {
+      state.colorTheme = t.id;
+      applyColorTheme();
+      saveState();
+      renderColorThemeGrid();
+      showToast(`🎨 Tema "${t.name}" aplicado`);
+    });
+    colorThemeGrid.appendChild(card);
+  });
+}
+
+function openColorThemeModal() {
+  lastFocusedBeforeColorTheme = document.activeElement;
+  renderColorThemeGrid();
+  colorThemeModalOverlay.classList.add('active');
+  requestAnimationFrame(() => {
+    const active = colorThemeGrid.querySelector('.color-theme-card.active') || colorThemeGrid.querySelector('.color-theme-card');
+    if (active) active.focus();
+  });
+}
+
+function closeColorThemeModal() {
+  colorThemeModalOverlay.classList.remove('active');
+  if (lastFocusedBeforeColorTheme && document.body.contains(lastFocusedBeforeColorTheme)) {
+    lastFocusedBeforeColorTheme.focus();
+  }
+  lastFocusedBeforeColorTheme = null;
 }
 
 /* ============ GERAR VERSÃO OFFLINE ============ */
@@ -1451,6 +1595,7 @@ async function generateOfflineHTML() {
       items: state.items,
       title: state.title,
       theme: state.theme,
+      colorTheme: state.colorTheme,
       muted: state.muted,
       weights: state.weights,
       settings: state.settings,
@@ -1483,6 +1628,7 @@ ${cssText}
     <button type="button" class="icon-btn" id="btnWheels" title="Minhas roletas" aria-label="Abrir gerenciador de roletas salvas" style="display:none;">🗂️</button>
     <button type="button" class="icon-btn" id="btnSpinSettings" title="Mecânicas de sorteio" aria-label="Abrir configurações de mecânicas de sorteio">⚙️</button>
     <button type="button" class="icon-btn" id="btnMute" title="Ativar/desativar som" aria-label="Ativar ou desativar som" aria-pressed="${state.muted}">${state.muted ? '🔇' : '🔊'}</button>
+    <button type="button" class="icon-btn" id="btnColorTheme" title="Tema de cores" aria-label="Escolher tema de cores">🎨</button>
     <button type="button" class="icon-btn" id="btnTheme" title="Alternar tema" aria-label="Alternar entre tema claro e escuro">${state.theme === 'dark' ? '☀️' : '🌙'}</button>
     <button type="button" class="icon-btn" id="btnPresent" title="Modo apresentação" aria-label="Abrir modo apresentação">⛶</button>
   </div>
@@ -1512,6 +1658,21 @@ ${cssText}
       <button type="button" class="btn btn-secondary" id="btnImport">📂 Importar</button>
       <input type="file" id="fileInput" class="file-input" accept=".json" aria-hidden="true" tabindex="-1" />
     </div>
+
+    <div class="setting-row" style="margin-top: 10px;">
+      <label class="switch-label" for="settingGroupMode">
+        <span class="switch-text">
+          <strong>🎲 Modo grupos</strong>
+          <small>Divide a lista em grupos aleatórios</small>
+        </span>
+        <span class="switch"><input type="checkbox" id="settingGroupMode" /><span class="switch-track" aria-hidden="true"></span></span>
+      </label>
+      <div class="setting-sub" id="groupModeSub" style="display:none;">
+        <label for="settingGroupsCount">Quantos grupos?</label>
+        <input type="number" id="settingGroupsCount" min="2" max="20" value="2" class="setting-number-input" />
+        <button type="button" class="btn btn-secondary" id="btnDrawGroups" style="width:100%; justify-content:center; margin-top:4px;">🎲 Sortear grupos agora</button>
+      </div>
+    </div>
     
     <p class="offline-hint" id="offlineHint" style="display:block;">
       💡 Esta é uma versão offline. Os dados já estão embutidos neste arquivo.
@@ -1528,6 +1689,7 @@ ${cssText}
         <div class="wheel-pointer" aria-hidden="true"></div>
         <canvas class="wheel" id="wheelCanvas" width="600" height="600" role="button" tabindex="0" aria-label="Roleta. Pressione Enter ou Espaço para girar."></canvas>
         <div class="wheel-center" aria-hidden="true">🎨</div>
+        <div class="countdown-overlay" id="countdownOverlay" aria-hidden="true"></div>
       </div>
     </div>
     <div class="wheel-status" id="wheelStatus" aria-live="polite">Clique na roleta para girar</div>
@@ -1594,6 +1756,19 @@ ${cssText}
   </div>
 </div>
 
+<div class="modal-overlay" id="colorThemeModalOverlay">
+  <div class="modal wheels-modal" role="dialog" aria-modal="true" aria-labelledby="colorThemeModalTitle">
+    <div class="modal-header">
+      <h3 id="colorThemeModalTitle">🎨 Tema de cores</h3>
+      <button type="button" class="modal-close" id="colorThemeModalClose" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body wheels-modal-body">
+      <p class="templates-hint">Escolha a paleta de cores do site.</p>
+      <div class="color-theme-grid" id="colorThemeGrid" aria-live="polite"></div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="settingsModalOverlay">
   <div class="modal wheels-modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
     <div class="modal-header">
@@ -1610,6 +1785,16 @@ ${cssText}
             <small>Remove o item sorteado da roleta assim que sai</small>
           </span>
           <span class="switch"><input type="checkbox" id="settingAutoRemove" /><span class="switch-track" aria-hidden="true"></span></span>
+        </label>
+      </div>
+
+      <div class="setting-row">
+        <label class="switch-label" for="settingCountdown">
+          <span class="switch-text">
+            <strong>Contagem regressiva</strong>
+            <small>Mostra 3, 2, 1 antes de girar</small>
+          </span>
+          <span class="switch"><input type="checkbox" id="settingCountdown" /><span class="switch-track" aria-hidden="true"></span></span>
         </label>
       </div>
 
@@ -1638,21 +1823,6 @@ ${cssText}
         <div class="setting-sub" id="weightsSub" style="display:none;">
           <p class="weights-empty-hint" id="weightsEmptyHint">Carregue itens na roleta para ajustar os pesos.</p>
           <div class="weights-list" id="weightsList"></div>
-        </div>
-      </div>
-
-      <div class="setting-row">
-        <label class="switch-label" for="settingGroupMode">
-          <span class="switch-text">
-            <strong>Modo grupos</strong>
-            <small>Divide a lista em grupos aleatórios</small>
-          </span>
-          <span class="switch"><input type="checkbox" id="settingGroupMode" /><span class="switch-track" aria-hidden="true"></span></span>
-        </label>
-        <div class="setting-sub" id="groupModeSub" style="display:none;">
-          <label for="settingGroupsCount">Quantos grupos?</label>
-          <input type="number" id="settingGroupsCount" min="2" max="20" value="2" class="setting-number-input" />
-          <button type="button" class="btn btn-secondary" id="btnDrawGroups" style="width:100%; justify-content:center; margin-top:4px;">🎲 Sortear grupos agora</button>
         </div>
       </div>
     </div>
@@ -1944,8 +2114,21 @@ settingsModalOverlay.addEventListener('keydown', e => {
   if (e.key === 'Tab') trapFocus(settingsModalOverlay.querySelector('.modal'), e);
 });
 
+$('btnColorTheme').addEventListener('click', openColorThemeModal);
+$('colorThemeModalClose').addEventListener('click', closeColorThemeModal);
+colorThemeModalOverlay.addEventListener('click', e => { if (e.target === colorThemeModalOverlay) closeColorThemeModal(); });
+colorThemeModalOverlay.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { e.stopPropagation(); closeColorThemeModal(); }
+  if (e.key === 'Tab') trapFocus(colorThemeModalOverlay.querySelector('.modal'), e);
+});
+
 $('settingAutoRemove').addEventListener('change', e => {
   state.settings.autoRemove = e.target.checked;
+  saveState();
+});
+
+$('settingCountdown').addEventListener('change', e => {
+  state.settings.countdown = e.target.checked;
   saveState();
 });
 
@@ -2089,9 +2272,9 @@ document.addEventListener('keydown', e => {
     }
   }
   const isSpinTrigger = e.key === ' ' || (e.key === 'Enter' && e.target === wheelCanvas);
-  const anyOverlayActive = [modalOverlay, wheelsModalOverlay, templatesModalOverlay, settingsModalOverlay, groupsModalOverlay, dialogModalOverlay]
+  const anyOverlayActive = [modalOverlay, wheelsModalOverlay, templatesModalOverlay, settingsModalOverlay, groupsModalOverlay, dialogModalOverlay, colorThemeModalOverlay]
     .some(el => el.classList.contains('active'));
-  if (isSpinTrigger && !state.spinning && !anyOverlayActive) {
+  if (isSpinTrigger && !state.spinning && !spinLocked && !anyOverlayActive) {
     e.preventDefault();
     spinWheel();
   }
