@@ -1655,8 +1655,9 @@ ${cssText}
       <button type="button" class="btn btn-primary" id="btnLoad">🎯 Carregar</button>
       <button type="button" class="btn btn-secondary" id="btnTemplates">📋 Usar modelo</button>
       <button type="button" class="btn btn-secondary" id="btnExport">💾 Exportar JSON</button>
-      <button type="button" class="btn btn-secondary" id="btnImport">📂 Importar</button>
-      <input type="file" id="fileInput" class="file-input" accept=".json" aria-hidden="true" tabindex="-1" />
+      <button type="button" class="btn btn-secondary" id="btnExportCSV">📄 Exportar CSV</button>
+      <button type="button" class="btn btn-secondary" id="btnImport" title="Importar arquivo JSON ou CSV" aria-label="Importar arquivo JSON ou CSV">📂 Importar</button>
+      <input type="file" id="fileInput" class="file-input" accept=".json,.csv" aria-hidden="true" tabindex="-1" />
     </div>
 
     <div class="setting-row" style="margin-top: 10px;">
@@ -1951,6 +1952,100 @@ uploadArea.addEventListener('drop', (e) => {
   handleImageUpload(e.dataTransfer.files);
 });
 
+/* ============ CSV: PARSER E SERIALIZADOR ============
+   Parser simples no padrão RFC4180: entende campos entre aspas (com vírgula,
+   aspas duplicadas "" ou quebra de linha dentro do campo), sem depender de
+   bibliotecas externas. */
+function parseCSV(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else { inQuotes = false; }
+      } else {
+        field += c;
+      }
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ',') {
+      row.push(field); field = '';
+    } else if (c === '\n') {
+      row.push(field); rows.push(row); row = []; field = '';
+    } else if (c === '\r') {
+      // ignorado — a quebra real vem do \n que normalmente o acompanha
+    } else {
+      field += c;
+    }
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+function csvEscapeField(value) {
+  const s = String(value === undefined || value === null ? '' : value);
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function toCSV(rows) {
+  return rows.map(r => r.map(csvEscapeField).join(',')).join('\r\n');
+}
+
+/* Extrai itens (e pesos, se houver 2ª coluna) das linhas de um CSV,
+   detectando e pulando uma eventual linha de cabeçalho. */
+function itemsFromCSVRows(rows) {
+  if (rows.length === 0) return { items: [], weights: [] };
+  let startIdx = 0;
+  const first = rows[0] || [];
+  const firstCol = (first[0] || '').trim();
+  const secondCol = (first[1] || '').trim();
+  const looksLikeHeader =
+    /^(item|itens|nome|texto)$/i.test(firstCol) ||
+    (first.length > 1 && secondCol.length > 0 && !/^\d+$/.test(secondCol));
+  if (looksLikeHeader) startIdx = 1;
+
+  const items = [];
+  const weights = [];
+  const seen = new Map();
+  for (let i = startIdx; i < rows.length; i++) {
+    const cols = rows[i];
+    const value = (cols[0] || '').trim();
+    if (!value) continue;
+    let w = 1;
+    if (cols.length > 1) {
+      const parsed = parseInt((cols[1] || '').trim(), 10);
+      if (Number.isFinite(parsed) && parsed > 0) w = Math.max(1, Math.min(10, parsed));
+    }
+    if (!seen.has(value)) {
+      seen.set(value, w);
+      items.push(value);
+      weights.push(w);
+    }
+  }
+  return { items, weights };
+}
+
+/* ============ APLICAR ITENS IMPORTADOS (JSON ou CSV) ============ */
+function applyImportedItems(items, weights, title) {
+  state.weights = weights && weights.length === items.length ? weights : items.map(() => 1);
+  state.items = items;
+  linksInput.value = items.join('\n');
+  if (typeof title === 'string' && title.trim()) {
+    state.title = title.trim().slice(0, 120);
+    $('titleEdit').value = state.title;
+    document.title = state.title + ' — RoletArtes';
+  }
+  assignColors(); // resincroniza cores; pesos já setados acima são preservados
+  state.currentAngle = 0;
+  renderWheel();
+  saveState();
+  updateCounter();
+}
+
 $('btnExport').addEventListener('click', () => {
   if (state.items.length === 0) { showToast('⚠️ Nada para exportar'); return; }
   const data = {
@@ -1968,6 +2063,21 @@ $('btnExport').addEventListener('click', () => {
   showToast('💾 JSON exportado!');
 });
 
+$('btnExportCSV').addEventListener('click', () => {
+  if (state.items.length === 0) { showToast('⚠️ Nada para exportar'); return; }
+  const weights = state.weights.length === state.items.length ? state.weights : state.items.map(() => 1);
+  const rows = [['item', 'peso'], ...state.items.map((item, i) => [item, String(weights[i] || 1)])];
+  // BOM no início ajuda o Excel a reconhecer UTF-8 e mostrar acentos certinho
+  const blob = new Blob(['\uFEFF' + toCSV(rows)], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `roletartes-${Date.now()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('📄 CSV exportado!');
+});
+
 $('btnImport').addEventListener('click', () => $('fileInput').click());
 $('fileInput').addEventListener('change', e => {
   const file = e.target.files[0];
@@ -1978,9 +2088,30 @@ $('fileInput').addEventListener('change', e => {
     e.target.value = '';
     return;
   }
+  const isCSV = file.name.toLowerCase().endsWith('.csv');
   const reader = new FileReader();
+
   reader.onload = ev => {
     try {
+      if (isCSV) {
+        const { items, weights } = itemsFromCSVRows(parseCSV(ev.target.result));
+        if (items.length === 0) {
+          showToast('⚠️ O CSV não contém itens válidos');
+          return;
+        }
+        applyImportedItems(items, weights, null);
+        const hasCustomWeights = weights.some(w => w !== 1);
+        if (hasCustomWeights && !state.settings.weighted) {
+          state.settings.weighted = true;
+          state.sliceLabels = null;
+          renderWheel();
+          syncSettingsUI();
+          saveState();
+        }
+        showToast(`📄 ${items.length} item${items.length !== 1 ? 'ns' : ''} importado${items.length !== 1 ? 's' : ''} do CSV!${hasCustomWeights ? ' Pesos por item foi ativado.' : ''}`);
+        return;
+      }
+
       const data = JSON.parse(ev.target.result);
       if (Array.isArray(data.items)) {
         const cleaned = [...new Set(
@@ -1993,24 +2124,13 @@ $('fileInput').addEventListener('change', e => {
           showToast('⚠️ O arquivo não contém itens válidos');
           return;
         }
-        state.items = cleaned;
-        linksInput.value = cleaned.join('\n');
-        if (typeof data.title === 'string' && data.title.trim()) {
-          state.title = data.title.trim().slice(0, 120);
-          $('titleEdit').value = state.title;
-          document.title = state.title + ' — RoletArtes';
-        }
-        assignColors();
-        state.currentAngle = 0;
-        renderWheel();
-        saveState();
-        updateCounter();
+        applyImportedItems(cleaned, cleaned.map(() => 1), data.title);
         showToast(`📂 ${cleaned.length} item${cleaned.length !== 1 ? 'ns' : ''} importado${cleaned.length !== 1 ? 's' : ''}!`);
       } else {
         showToast('⚠️ JSON inválido: esperado um campo "items" com uma lista');
       }
     } catch(err) {
-      showToast('⚠️ Erro ao ler arquivo');
+      showToast(isCSV ? '⚠️ Erro ao ler o CSV' : '⚠️ Erro ao ler arquivo');
     }
   };
   reader.readAsText(file);
